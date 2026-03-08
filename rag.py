@@ -15,7 +15,8 @@ if env_path.exists():
 
 from groq_utils import get_client, num_keys, get_next_key_index, GROQ_KEYS
 if not GROQ_KEYS:
-    raise ValueError("GROQ_API_KEY or GROQ_API_KEYS not found.")
+    import warnings
+    warnings.warn("GROQ_API_KEY or GROQ_API_KEYS not set. RAG will fail until configured on Render.")
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -221,7 +222,6 @@ def initialize_rag():
         logger.info("RAG initialized successfully")
     except Exception as e:
         logger.error(f"Error initializing RAG: {e}")
-        raise
 
 
 def _fix_stt_errors(text):
@@ -378,6 +378,8 @@ def retrieve_context(query, top_k=5):
 
 
 def generate_answer(query, conversation_history=None):
+    if not GROQ_KEYS:
+        return ("Service is being configured. Please try again in a moment.", False)
     query = _fix_stt_errors(query)
     q_lower = query.lower().strip()
 

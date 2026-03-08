@@ -1,6 +1,7 @@
 """TTS: edge-tts only. Groq skipped."""
 from __future__ import annotations
 import asyncio
+import concurrent.futures
 import threading
 import uuid
 import io
@@ -146,20 +147,33 @@ def _groq_tts_bytes(text: str) -> bytes:
 EDGE_VOICE = "en-US-JennyNeural"
 EDGE_RATE = "+15%"  # Faster for ~1 sec response feel; reduces pauses after dots
 
+# Thread pool for edge-tts: asyncio.run() cannot run inside gevent's event loop.
+# Run in a separate thread where we have a clean event loop.
+_edge_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="edge_tts")
+
 
 def _edge_tts_bytes(text: str) -> bytes:
-    try:
+    def _run_in_thread():
         import edge_tts
         chunks = []
 
-        async def _run():
+        async def _async_run():
             comm = edge_tts.Communicate(text, EDGE_VOICE, rate=EDGE_RATE, pitch="+0Hz")
             async for c in comm.stream():
                 if c.get("type") == "audio":
                     chunks.append(c["data"])
 
-        asyncio.run(_run())
-        return b"".join(chunks) if chunks else b""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(_async_run())
+            return b"".join(chunks) if chunks else b""
+        finally:
+            loop.close()
+
+    try:
+        future = _edge_executor.submit(_run_in_thread)
+        return future.result(timeout=30)
     except Exception as e:
         logger.error(f"edge-tts error: {e}")
         return b""

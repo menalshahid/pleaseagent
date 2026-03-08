@@ -578,16 +578,16 @@
   let agentSpeaking   = false;  // true while agent audio is playing
   let requestInFlight = false;  // true while processing a user query
 
-  // Normal listening — rejects typing, doors, distant background voices
-  const VAD_THRESHOLD_NORMAL   = 0.013;
-  const VAD_CONFIRM_NORMAL_MS  = 350;
+  // Normal listening — start quickly when user speaks
+  const VAD_THRESHOLD_NORMAL   = 0.012;
+  const VAD_CONFIRM_NORMAL_MS  = 180;   // Start recording sooner (was 350)
 
   // Barge-in mode — interrupt agent as soon as user speaks
-  const VAD_THRESHOLD_BARGEIN  = 0.022;
-  const VAD_CONFIRM_BARGEIN_MS = 280;
+  const VAD_THRESHOLD_BARGEIN  = 0.020;
+  const VAD_CONFIRM_BARGEIN_MS = 180;
 
-  const VAD_SILENCE_MS         = 700;   // Faster end-of-speech detection for ~1s response
-  const VAD_MIN_SPEECH_MS      = 500;  // clips shorter than this are noise, ignored
+  const VAD_SILENCE_MS         = 500;   // Stop recording soon after user stops speaking (was 700)
+  const VAD_MIN_SPEECH_MS      = 400;   // clips shorter than this are noise, ignored
 
   function getRMS(data) {
     let s=0;
