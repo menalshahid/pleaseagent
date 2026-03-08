@@ -26,9 +26,14 @@ def init_call_record(session_id):
         json.dump(data, f, indent=2)
 
 def update_call_record(session_id, user, agent, escalated=False, phone=None):
+    os.makedirs("logs", exist_ok=True)
+    if not os.path.exists(CALL_RECORD_FILE):
+        init_call_record(session_id)
     with open(CALL_RECORD_FILE, "r") as f:
         data = json.load(f)
 
+    if session_id not in data:
+        data[session_id] = {"start_time": str(datetime.now()), "turns": [], "escalated": False, "phone": None}
     data[session_id]["turns"].append({
         "user": user,
         "agent": agent
@@ -44,9 +49,12 @@ def update_call_record(session_id, user, agent, escalated=False, phone=None):
         json.dump(data, f, indent=2)
 
 def end_call_record(session_id):
+    if not os.path.exists(CALL_RECORD_FILE):
+        return
     with open(CALL_RECORD_FILE, "r") as f:
         data = json.load(f)
-
+    if session_id not in data:
+        return
     data[session_id]["end_time"] = str(datetime.now())
 
     with open(CALL_RECORD_FILE, "w") as f:
@@ -54,6 +62,7 @@ def end_call_record(session_id):
 
 def append_lead_log(session_id, phone, unanswered_query):
     """Store lead with call_id, phone, the query that wasn't answered, and timestamp."""
+    os.makedirs("logs", exist_ok=True)
     with open(LEAD_LOG_FILE, "a", encoding="utf-8") as f:
         f.write(f"{datetime.now()} | call_id={session_id} | phone={phone} | unanswered_query={unanswered_query}\n")
 
