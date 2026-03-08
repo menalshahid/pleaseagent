@@ -41,13 +41,22 @@ KEYWORD_FILE_MAP = [
     (["closing merit", "last merit", "last year merit", "closing aggregate", "merit history", "merit 2024", "merit 2023",
       "calculate aggregate", "calculate my aggregate", "merit formula", "will merit", "will i get admission",
       "aggregate for", "merit criteria", "matric marks", "fsc marks", "entry test marks"],
-     ["merit_faq.txt", "all_content.txt", "calling_assistant_kb.json", "programs.csv"]),
+     ["admission_faqs_reference.txt", "merit_faq.txt", "all_content.txt", "calling_assistant_kb.json", "programs.csv"]),
+
+    (["entry test", "nat", "hat", "net", "ecat", "etea", "nts", "which test", "sat", "act",
+      "minimum score", "negative marking", "test validity", "result card", "fast entry test"],
+     ["admission_faqs_reference.txt", "eligibility_faq.txt", "all_content.txt", "calling_assistant_kb.json"]),
+
+    (["spring admission", "fall admission", "where to apply", "apply online", "age limit", "multiple programs",
+      "apply via post", "last date", "track application", "arn", "miss deadline", "visit campus"],
+     ["admission_faqs_reference.txt", "eligibility_faq.txt", "all_content.txt", "calling_assistant_kb.json"]),
 
     (["fee structure", "fee of", "fees of", "fee for", "fees for", "tuition fee", "semester fee", "how much fee",
       "cost of", "charges", "per semester", "fee per", "challan", "fee submission", "fee deadline",
       "bs computer science fee", "bs avionics fee", "computer science fee", "avionics fee", "fee of bs",
-      "ms fee", "ms computer science fee", "fee of ms", "graduate fee", "phd fee"],
-     ["fee_faq.txt", "calling_assistant_kb.json", "all_content.txt", "programs.csv"]),
+      "ms fee", "ms computer science fee", "fee of ms", "graduate fee", "phd fee",
+      "application fee", "processing fee", "admission fee", "installments", "refund", "endowment", "hbl"],
+     ["admission_faqs_reference.txt", "fee_faq.txt", "calling_assistant_kb.json", "all_content.txt", "programs.csv"]),
 
     (["programs under", "program under", "programs offered", "programs in", "offered by", "department programs",
       "what programs", "which programs", "degree programs", "all programs", "list of programs",
@@ -59,12 +68,15 @@ KEYWORD_FILE_MAP = [
     (["admission open", "admissions open", "when do admission", "last date", "admission close", "admission deadline",
       "when to apply", "application deadline", "admission date", "eligible", "eligibility", "can i apply", "who can apply",
       "pre-medical", "pre medical", "ics student", "dae", "a-level", "criteria for", "requirements for program",
-      "biotechnology", "fsc pre-engineering", "pre-engineering", "can i apply for", "apply in bs"],
-     ["eligibility_faq.txt", "programs.csv", "all_content.txt", "calling_assistant_kb.json"]),
+      "biotechnology", "fsc pre-engineering", "pre-engineering", "can i apply for", "apply in bs",
+      "60 percent", "50 percent", "minimum percentage", "supply", "fsc part", "provisional admission",
+      "ibcc", "equivalence", "cnic", "domicile", "attested", "documents"],
+     ["admission_faqs_reference.txt", "eligibility_faq.txt", "programs.csv", "all_content.txt", "calling_assistant_kb.json"]),
 
     (["transport", "bus", "shuttle", "pick and drop", "route", "hostel", "accommodation", "boarding", "dorm",
-      "transport to students", "does ist offer transport", "offer transport"],
-     ["transport_faq.txt", "calling_assistant_kb.json", "all_content.txt"]),
+      "transport to students", "does ist offer transport", "offer transport", "hostel fee", "mess mandatory",
+      "laundry", "wifi", "sports", "student life", "03000544707"],
+     ["admission_faqs_reference.txt", "transport_faq.txt", "calling_assistant_kb.json", "all_content.txt"]),
 
     (["vice chancellor", "vc ", " vc", "who is the vc", "who is vice chancellor"],
      ["vc_faq.txt", "faculty.csv", "contacts.csv", "calling_assistant_kb.json", "all_content.txt"]),
@@ -73,7 +85,8 @@ KEYWORD_FILE_MAP = [
      ["all_content.txt", "calling_assistant_kb.json"]),
 
     (["hod of", "head of department", "who is the hod", "who is the head of", "head of electrical",
-      "head of avionics", "head of computing", "hod of electrical", "hod of avionics"],
+      "head of avionics", "head of computing", "head of computer science", "hod of electrical", "hod of avionics",
+      "hod of computing", "hod of computer science", "computing department head", "computer science department head"],
      ["hod_faq.txt", "faculty.csv", "contacts.csv", "calling_assistant_kb.json"]),
 
     (["harassment", "harassment policy", "sexual harassment", "complaint cell", "hcc",
@@ -99,7 +112,7 @@ KEYWORD_FILE_MAP = [
      ["office_timings_faq.txt", "contacts.csv", "calling_assistant_kb.json", "all_content.txt"]),
 
     (["procedure to apply", "how to apply", "application process", "steps to apply", "apply in ist", "admission process"],
-     ["eligibility_faq.txt", "programs.csv", "calling_assistant_kb.json", "all_content.txt"]),
+     ["admission_faqs_reference.txt", "eligibility_faq.txt", "programs.csv", "calling_assistant_kb.json", "all_content.txt"]),
 
     (["research", "lab", "labs", "laboratory", "research center", "research centres", "research centers",
       "cubesat", "icube", "astronomy", "ncfa", "ncgsa", "national center of gis", "gis and space applications",
@@ -128,11 +141,28 @@ KEYWORD_FILE_MAP = [
     (["quality assessment", "quality assessments", "qec", "assessment 2012", "program teams 2012", "quality 2012"],
      ["quality_2012_faq.txt", "all_content.txt", "news.csv", "programs.csv"]),
 
-    (["scholarship", "financial aid", "foreign", "international student", "ms program", "phd program", "master"],
-     ["all_content.txt", "calling_assistant_kb.json", "programs.csv"]),
+    (["scholarship", "financial aid", "foreign", "international student", "ms program", "phd program", "master",
+      "need-based", "honhaar", "merit scholarship", "peef", "noc", "financial aid office", "suparco sponsor"],
+     ["admission_faqs_reference.txt", "all_content.txt", "calling_assistant_kb.json", "programs.csv"]),
 
     (["sparco", "suparco", "space agency", "pakistan space"],
      ["suparco_faq.txt", "all_content.txt", "calling_assistant_kb.json"]),
+
+    (["merit list", "merit list displayed", "when merit list", "how many merit lists", "waiting list",
+      "confirm seat", "deposit fee", "self-finance", "freeze semester", "migration to ist", "transfer",
+      "interview for bs", "change program"],
+     ["admission_faqs_reference.txt", "merit_faq.txt", "all_content.txt", "calling_assistant_kb.json"]),
+
+    (["aerospace vs avionics", "difference between aerospace", "space science vs aerospace", "avionics vs aerospace",
+      "materials science", "mechanical engineering", "accredited", "pec", "washington accord", "nceac",
+      "under military", "medium of instruction", "bs ai", "bs data science", "bs software engineering"],
+     ["admission_faqs_reference.txt", "programs.csv", "programs_faq.txt", "all_content.txt", "calling_assistant_kb.json"]),
+
+    (["when do classes start", "orientation day", "grading system", "gpa", "cgpa", "career", "where do graduates work",
+      "job fair", "career development", "cdc", "go abroad", "ms after ist", "international collaboration",
+      "join military", "short service commission", "ssc", "paf", "navy", "library 24", "library hours",
+      "admissions office", "9075406", "9075100"],
+     ["admission_faqs_reference.txt", "all_content.txt", "calling_assistant_kb.json"]),
 ]
 
 
@@ -426,7 +456,7 @@ CRITICAL RULES — FOLLOW EXACTLY:
 6. For HARASSMENT, SEXUAL HARASSMENT, HCC, COMPLAINT CELL, COMPLAINT POLICY, VC MESSAGE, VICE CHANCELLOR MESSAGE: Give ALL important information from CONTEXT. Do NOT give just one line. Include: zero-tolerance policy, when HCC was established (Feb 2012), contact (Dr. Rahila Naz, Head of HCC, Room 212 Block 2, phone 051-9075562, email head.hcc@ist.edu.pk), that process is confidential and fair, no reprimand for legitimate complaints. For VC message include the vision, key points about IST, faculty, students, entrepreneurial focus. Speak 4-6 clear sentences so the caller hears the full important info.
 7. For all other answers: Keep to maximum 2 very short sentences unless CONTEXT clearly has more detail to share. Be concise for phone.
 8. Use amounts in lakh and thousand when CONTEXT gives numbers. Stay on topic; only answer what the user asked.
-9. For "who is the VC/vice chancellor/HOD/head of [department]": Match the EXACT department the user asked for. If they ask "HOD of Electrical", answer ONLY the person for Electrical Engineering, NOT Computing or any other department. If CONTEXT lists multiple departments (e.g. Electrical: Dr. Adnan Zafar, Avionics: Dr. Israr Hussain, Computing: Khurram Khurshid), pick the one that matches the user's department name. Do not say you don't have the information if CONTEXT lists that person.
+9. For "who is the VC/vice chancellor/HOD/head of [department]": Match the EXACT department the user asked for. If they ask "HOD of Electrical", answer ONLY the person for Electrical Engineering, NOT Computing or any other department. If CONTEXT lists multiple departments (e.g. Electrical: Dr. Adnan Zafar, Avionics: Dr. Israr Hussain, Computing: Khurram Khurshid), pick the one that matches the user's department name. NOTE: Head of Computing and Head of Computer Science are the SAME — both refer to Khurram Khurshid (Head of Computing Department). Answer with that person when asked about either Computing or Computer Science. Do not say you don't have the information if CONTEXT lists that person.
    VICE CHANCELLOR of IST: The ONLY correct answer is Dr. Syed Najeeb Ahmad (Maj Gen Dr. Syed Najeeb Ahmad Retd). NEVER say "Dr. Raza ibn Abubakr" or any other name for VC — that is wrong.
 10. NEVER include, say, or read aloud any URL (http, https, ist.edu.pk, or any web link). Your reply is spoken over the phone — give only factual content: program names, numbers, descriptions. If CONTEXT contains both program names and URLs, list ONLY the program names (e.g. Computer Science, Artificial Intelligence, Data Science, Software Engineering, Computer Engineering). Do not mention or read any link.
 11. For "who is the director of [center/unit name]" (e.g. NCFA, National Center for Failure Analysis): If CONTEXT lists "The Team" or a name with title "Director" for that center, answer with that name and "Director" from CONTEXT. Do not say you don't have the information if CONTEXT lists that person.
@@ -453,6 +483,7 @@ CRITICAL RULES — FOLLOW EXACTLY:
 29. RESEARCH CENTRES / LABS: IST has ORIC, ICUBE-Q, CSET, BIC, NCFA, Astronomy Resource Center, Space Systems Lab, Cyber and Information Security Lab, AI and Computer Vision Lab, Propulsion Lab, Aerodynamics Lab, Control Systems Lab, WiSP Lab, and more. Answer from CONTEXT.
 30. LOCATION / ADDRESS: IST is at 1, Islamabad Highway, Near CDA Toll Plaza, Islamabad 44000, Pakistan. About 20 min from Islamabad and Rawalpindi. Driving directions in CONTEXT.
 31. EVENTS / WORKSHOPS: Convocation, ICAST, ICEAST, workshops (Plasma Spray, Python, Bridge the Gap, Lunar Satellite, etc.), Job Fair, TEDx. Answer from news.csv and all_content.
+32. ADMISSION FAQs (eligibility, entry test, merit, fee, hostel, documents, spring/fall, how to apply, scholarships, etc.): Answer directly from CONTEXT. Do NOT say "please check the website" or "call for details" as the main response. Give the factual answer from CONTEXT first. Only if CONTEXT truly does not have the info, use the escalation sentence. For more questions, CONTEXT may mention calling +92-51-9075406 or 051-9075100 — you may add that as a secondary option after giving the full answer.
 
 CONTEXT:
 {context}"""
@@ -538,6 +569,7 @@ def generate_answer_stream(query, conversation_history=None):
     system_prompt = f"""You are IST voice assistant. Only facts from CONTEXT. No URLs.
 If not in CONTEXT: "I don't have that information. Please provide your phone number and we will contact you."
 For HARASSMENT, HCC, COMPLAINT POLICY, VC MESSAGE: Give ALL important info (4-6 sentences). Zero-tolerance, HCC contact Dr. Rahila Naz Room 212 Block 2, 051-9075562, head.hcc@ist.edu.pk, confidential process. For VC message: vision, faculty, students, entrepreneurial focus.
+For ADMISSION FAQs (eligibility, entry test, merit, fee, hostel, documents, how to apply, scholarships): Answer directly from CONTEXT. Do NOT say "check website" or "call" as main response; give the factual answer first.
 For other topics: 1-2 short sentences. VC: Dr. Syed Najeeb Ahmad. HOD: match dept. Fees: from CONTEXT.
 
 CONTEXT:
