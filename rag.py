@@ -67,14 +67,18 @@ KEYWORD_FILE_MAP = [
      ["transport_faq.txt", "calling_assistant_kb.json", "all_content.txt"]),
 
     (["vice chancellor", "vc ", " vc", "who is the vc", "who is vice chancellor"],
-     ["vc_faq.txt", "faculty.csv", "contacts.csv", "calling_assistant_kb.json"]),
+     ["vc_faq.txt", "faculty.csv", "contacts.csv", "calling_assistant_kb.json", "all_content.txt"]),
+
+    (["vc message", "vc's message", "vice chancellor message", "message of vc", "vision of ist", "ist vision"],
+     ["all_content.txt", "calling_assistant_kb.json"]),
 
     (["hod of", "head of department", "who is the hod", "who is the head of", "head of electrical",
       "head of avionics", "head of computing", "hod of electrical", "hod of avionics"],
      ["hod_faq.txt", "faculty.csv", "contacts.csv", "calling_assistant_kb.json"]),
 
-    (["harassment", "harassment policy", "sexual harassment", "complaint cell", "hcc"],
-     ["all_content.txt", "calling_assistant_kb.json"]),
+    (["harassment", "harassment policy", "sexual harassment", "complaint cell", "hcc",
+      "complaint policy", "how to complain", "file complaint", "harassment complaint"],
+     ["harassment_faq.txt", "all_content.txt", "calling_assistant_kb.json"]),
 
     (["mess", "mess facility", "cafeteria", "canteen", "food", "dining"],
      ["all_content.txt", "calling_assistant_kb.json"]),
@@ -419,14 +423,15 @@ CRITICAL RULES — FOLLOW EXACTLY:
 3. Never explain, never apologize, never say "I'm not sure", never add general knowledge, never say "check website".
 4. Never answer questions about topics not in CONTEXT — use the exact escalation sentence.
 5. For ELIGIBILITY queries (e.g. "eligibility for X", "who can apply", "criteria for program"): Give the COMPLETE eligibility/criteria from CONTEXT. Do NOT shorten; provide the full info so the caller hears everything.
-6. For all other answers: Keep to maximum 2 very short sentences unless CONTEXT clearly has more detail to share. Be concise for phone.
-7. Use amounts in lakh and thousand when CONTEXT gives numbers. Stay on topic; only answer what the user asked.
-8. For "who is the VC/vice chancellor/HOD/head of [department]": Match the EXACT department the user asked for. If they ask "HOD of Electrical", answer ONLY the person for Electrical Engineering, NOT Computing or any other department. If CONTEXT lists multiple departments (e.g. Electrical: Dr. Adnan Zafar, Avionics: Dr. Israr Hussain, Computing: Khurram Khurshid), pick the one that matches the user's department name. Do not say you don't have the information if CONTEXT lists that person.
+6. For HARASSMENT, SEXUAL HARASSMENT, HCC, COMPLAINT CELL, COMPLAINT POLICY, VC MESSAGE, VICE CHANCELLOR MESSAGE: Give ALL important information from CONTEXT. Do NOT give just one line. Include: zero-tolerance policy, when HCC was established (Feb 2012), contact (Dr. Rahila Naz, Head of HCC, Room 212 Block 2, phone 051-9075562, email head.hcc@ist.edu.pk), that process is confidential and fair, no reprimand for legitimate complaints. For VC message include the vision, key points about IST, faculty, students, entrepreneurial focus. Speak 4-6 clear sentences so the caller hears the full important info.
+7. For all other answers: Keep to maximum 2 very short sentences unless CONTEXT clearly has more detail to share. Be concise for phone.
+8. Use amounts in lakh and thousand when CONTEXT gives numbers. Stay on topic; only answer what the user asked.
+9. For "who is the VC/vice chancellor/HOD/head of [department]": Match the EXACT department the user asked for. If they ask "HOD of Electrical", answer ONLY the person for Electrical Engineering, NOT Computing or any other department. If CONTEXT lists multiple departments (e.g. Electrical: Dr. Adnan Zafar, Avionics: Dr. Israr Hussain, Computing: Khurram Khurshid), pick the one that matches the user's department name. Do not say you don't have the information if CONTEXT lists that person.
    VICE CHANCELLOR of IST: The ONLY correct answer is Dr. Syed Najeeb Ahmad (Maj Gen Dr. Syed Najeeb Ahmad Retd). NEVER say "Dr. Raza ibn Abubakr" or any other name for VC — that is wrong.
-9. NEVER include, say, or read aloud any URL (http, https, ist.edu.pk, or any web link). Your reply is spoken over the phone — give only factual content: program names, numbers, descriptions. If CONTEXT contains both program names and URLs, list ONLY the program names (e.g. Computer Science, Artificial Intelligence, Data Science, Software Engineering, Computer Engineering). Do not mention or read any link.
-10. For "who is the director of [center/unit name]" (e.g. NCFA, National Center for Failure Analysis): If CONTEXT lists "The Team" or a name with title "Director" for that center, answer with that name and "Director" from CONTEXT. Do not say you don't have the information if CONTEXT lists that person.
-11. For FEE queries (fee structure, fee of X program, tuition, cost, how much): If CONTEXT contains "Fee Structure" or "Tuition Fee" with amounts in Pak Rs or rupees, state them clearly. BS programs use a common fee structure; give the one-time and per-semester amounts from CONTEXT. Do not say you don't have the information if CONTEXT has fee figures.
-12. For "who is the director of [center]" (e.g. NCFA): If CONTEXT lists a name followed by "Director" in a Team section (e.g. "Dr Anjum Tauqir Director"), that person is the Director — answer with that name. Do not say director is not mentioned if CONTEXT clearly lists it.
+10. NEVER include, say, or read aloud any URL (http, https, ist.edu.pk, or any web link). Your reply is spoken over the phone — give only factual content: program names, numbers, descriptions. If CONTEXT contains both program names and URLs, list ONLY the program names (e.g. Computer Science, Artificial Intelligence, Data Science, Software Engineering, Computer Engineering). Do not mention or read any link.
+11. For "who is the director of [center/unit name]" (e.g. NCFA, National Center for Failure Analysis): If CONTEXT lists "The Team" or a name with title "Director" for that center, answer with that name and "Director" from CONTEXT. Do not say you don't have the information if CONTEXT lists that person.
+12. For FEE queries (fee structure, fee of X program, tuition, cost, how much): If CONTEXT contains "Fee Structure" or "Tuition Fee" with amounts in Pak Rs or rupees, state them clearly. BS programs use a common fee structure; give the one-time and per-semester amounts from CONTEXT. Do not say you don't have the information if CONTEXT has fee figures.
+13. For "who is the director of [center]" (e.g. NCFA): If CONTEXT lists a name followed by "Director" in a Team section (e.g. "Dr Anjum Tauqir Director"), that person is the Director — answer with that name. Do not say director is not mentioned if CONTEXT clearly lists it.
 13. For transport/bus/shuttle: ONLY say what is in CONTEXT. If CONTEXT says IST offers transport facilities after registration, charges as per contract, optional — say exactly that. NEVER add routes, phone numbers, or "call X" unless that exact number appears in CONTEXT. If caller asks for routes or a contact number and CONTEXT has none, use escalation sentence.
 14. For NCGSA: If CONTEXT has "National Center of GIS and Space Applications" or "NCGSA", answer that NCGSA is HEC's National Center of GIS and Space Applications; IST collaborates with it.
 15. For eligibility (e.g. "can I apply for BS Biotechnology with FSC pre-engineering"): If CONTEXT says Biotechnology needs "FSc in any science group with Biology, Chemistry, Physics, Mathematics, or Computer Science", FSC pre-engineering qualifies. Answer yes.
@@ -439,7 +444,7 @@ CRITICAL RULES — FOLLOW EXACTLY:
 20. CLOSING MERIT: Use historical data from CONTEXT. For "will merit increase/decrease": trend has been stable/slightly rising; exact closing known when merit list published. For Biotechnology: first year, no previous closing merit. Do not promise cutoffs.
 21. PROGRAMS BY DEPARTMENT: List ONLY programs that appear in CONTEXT. Computing: Computer Science, Artificial Intelligence, Data Science, Software Engineering, Computer Engineering. Electrical: Electrical Engineering. Space Science: Space Science. Engineering: Aerospace, Avionics, Electrical, Mechanical, Metallurgy & Materials. Science: Space Science, Physics, Math, RS&GIS, Chemistry (Nanotechnology), Biotechnology. Do NOT add or remove any program. If CONTEXT lists different names, use those exact names.
 22. Answer ONLY the CURRENT question. Do not mix up topics: if asked about harassment policy, answer only harassment/HCC; if asked about mess/cafeteria, answer only dining/cafeteria from CONTEXT; if asked about hostel, answer only hostel. Never give hostel info when asked about harassment, or transport when asked about mess.
-23. HARASSMENT/SEXUAL HARASSMENT/HCC: If CONTEXT mentions Harassment Complaint Cell (HCC), zero-tolerance policy, Dr. Rahila Naz, or HEC Policy on Protection against Sexual Harassment, summarize that. Do not answer with hostel, transport, or unrelated content.
+23. HARASSMENT/SEXUAL HARASSMENT/HCC/COMPLAINT: Give COMPLETE important info. IST has zero-tolerance. HCC established 20 Feb 2012. Contact Dr. Rahila Naz, Head of HCC, Room 212 Block 2, 051-9075562, head.hcc@ist.edu.pk. Process is confidential and fair. No reprimand for legitimate complaints. Do NOT give just one sentence.
 24. MESS/CAFETERIA/CANTEEN/DINING: If CONTEXT mentions cafeteria, dining timings, canteen, cafeteria contractor, or mess facilities, answer from that. IST has cafeteria on campus, dining timings, and cafeteria services.
 25. OFFICE TIMINGS: If CONTEXT says IST is open 8 AM to 4 PM Monday to Friday, or similar office hours, state that. IST main campus and offices: 8 AM to 4 PM, Monday to Friday; closed weekends.
 26. PROCEDURE TO APPLY / HOW TO APPLY: Steps from CONTEXT: (1) Admissions announced on IST website/newspapers (BS: March/April; MS/PhD: April-May and Nov-Dec), (2) Create account at www.ist.edu.pk or eportal.ist.edu.pk, complete online form, upload documents, (3) Deposit application fee via challan at Meezan Bank/HBL, (4) Merit list displayed. Give this from CONTEXT.
@@ -465,7 +470,7 @@ CONTEXT:
                         {"role": "user", "content": user_message}
                     ],
                     temperature=0.1,
-                    max_tokens=120
+                    max_tokens=250
                 )
                 reply = response.choices[0].message.content
                 if not reply or not reply.strip():
@@ -530,9 +535,10 @@ def generate_answer_stream(query, conversation_history=None):
         yield "I don't have that information. Please provide your phone number and we will contact you.", True
         return
 
-    system_prompt = f"""You are IST voice assistant. Answer in 1-2 short sentences. Only facts from CONTEXT. No URLs.
+    system_prompt = f"""You are IST voice assistant. Only facts from CONTEXT. No URLs.
 If not in CONTEXT: "I don't have that information. Please provide your phone number and we will contact you."
-VC: Dr. Syed Najeeb Ahmad. HOD: match exact dept (Electrical=Dr Adnan Zafar, Avionics=Dr Israr Hussain, Computing=Khurram Khurshid). Fees/transport: only from CONTEXT.
+For HARASSMENT, HCC, COMPLAINT POLICY, VC MESSAGE: Give ALL important info (4-6 sentences). Zero-tolerance, HCC contact Dr. Rahila Naz Room 212 Block 2, 051-9075562, head.hcc@ist.edu.pk, confidential process. For VC message: vision, faculty, students, entrepreneurial focus.
+For other topics: 1-2 short sentences. VC: Dr. Syed Najeeb Ahmad. HOD: match dept. Fees: from CONTEXT.
 
 CONTEXT:
 {context}"""
@@ -550,7 +556,7 @@ CONTEXT:
                         {"role": "user", "content": user_message}
                     ],
                     temperature=0.1,
-                    max_tokens=100,
+                    max_tokens=180,
                     stream=True,
                 )
                 buffer = ""
