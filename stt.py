@@ -1,78 +1,49 @@
+"""Speech-to-text using Groq Whisper API. Supports webm, mp3, wav, etc. from browser."""
 import os
+import re
 import logging
-from groq_utils import get_client, num_keys, get_next_key_index, GROQ_KEYS
 
 logger = logging.getLogger(__name__)
 
-# Max 896 characters allowed by Groq Whisper
-WHISPER_PROMPT = (
-    "IST, Institute of Space Technology. fee structure, semester fee, "
-    "BS Electrical Engineering, BS Computer Engineering, BS Aerospace Engineering, "
-    "BS Avionics Engineering, BS Mechanical Engineering, BS Software Engineering, "
-    "BS Computer Science, BS Space Science, BS Mathematics, BS Biotechnology, "
-    "BS Data Science, BS Artificial Intelligence, BS Materials Science, "
-    "merit based scholarship, closing merit, merit aggregate, merit 2024, "
-    "admission open, last date to apply, entry test, FSc, matric, DAE, A-level, "
-    "hostel charges, transport, bus route, lakh, rupees, eligibility"
-)
+def transcribe_audio(audio_file):
+    """Transcribe audio file (from browser MediaRecorder - webm, etc.) using Groq Whisper."""
+    api_key = os.getenv("GROQ_API_KEY") or (os.getenv("GROQ_API_KEYS") or "").split(",")[0].strip()
+    if not api_key:
+        logger.warning("GROQ_API_KEY not set; STT will fail. Set it in .env")
+        return "Sorry, speech recognition is not configured. Please type your question."
 
-MIN_AUDIO_BYTES = 1000
-
-
-def transcribe_audio(file_path):
     try:
-        if not GROQ_KEYS:
-            logger.error("GROQ_API_KEY / GROQ_API_KEYS not set")
-            return ""
+        from groq import Groq
+        client = Groq(api_key=api_key)
 
-        if not os.path.exists(file_path):
-            logger.error(f"Audio file not found: {file_path}")
-            return ""
+        data = audio_file.read()
+        if not data or len(data) < 100:
+            return "Sorry, the audio was too short or empty."
 
-        file_size = os.path.getsize(file_path)
-        logger.info(f"Audio file size: {file_size} bytes")
+        # Use original filename for Groq (webm/m4a/ogg) — important for Safari/Android
+        fn = getattr(audio_file, "filename", None) or "audio.webm"
+        if not fn or fn == "":
+            fn = "audio.webm"
+        if "." not in fn:
+            fn = "audio.webm"
 
-        if file_size < MIN_AUDIO_BYTES:
-            logger.warning(f"Audio file too small ({file_size} bytes) — skipping.")
-            return ""
-
-        first_key = get_next_key_index()
-        key_order = [first_key] + [i for i in range(num_keys()) if i != first_key]
-        for key_idx in key_order:
-            try:
-                client = get_client(key_idx)
-                with open(file_path, "rb") as audio:
-                    transcription = client.audio.transcriptions.create(
-                        file=(os.path.basename(file_path), audio),
-                        model="whisper-large-v3",
-                        language="en",
-                        prompt=WHISPER_PROMPT
-                    )
-                text = transcription.text.strip()
-                logger.info(f"Transcription result: '{text}'")
-                return text
-
-            except Exception as e:
-                err_str = str(e).lower()
-                logger.error(f"STT error (key {key_idx+1}): {e}")
-
-                if "400" in err_str or "bad request" in err_str:
-                    logger.error(f"Groq 400 error — check prompt length or audio format. File size: {file_size} bytes")
-                    return ""
-
-                if "429" in err_str or "rate" in err_str or "quota" in err_str:
-                    logger.warning(f"Key {key_idx+1} rate limited, trying next...")
-                    continue
-
-                if "401" in err_str or "invalid" in err_str or "unauthorized" in err_str:
-                    logger.warning(f"Key {key_idx+1} unauthorized, trying next...")
-                    continue
-
-                continue
-
-        logger.error("All keys exhausted for STT")
-        return ""
+        # language="en" + prompt to bias IST, BS, admissions terms
+        transcription = client.audio.transcriptions.create(
+            file=(fn, data),
+            model="whisper-large-v3-turbo",
+            language="en",
+            prompt="IST Institute of Space Technology. BS Bachelor of Science. Admissions, fee structure, transport, faculty, electrical engineering.",
+        )
+        text = transcription.text if hasattr(transcription, "text") else str(transcription)
+        text = text.strip()
+        # Fix common STT errors
+        if "industry" in text.lower() and ("transport" in text.lower() or "offer" in text.lower()):
+            text = text.replace("industry", "IST").replace("Industry", "IST")
+        if re.search(r"\bP\s*S\b|\bPS\b", text, re.I) and any(w in text.lower() for w in ["electrical", "mechanical", "computer", "engineering"]):
+            text = re.sub(r"\bP\s*S\b", "BS", text, flags=re.I).replace("PS ", "BS ")
+        logger.info("Transcription result: %s", repr(text)[:80])
+        return text or "Sorry, I could not understand the audio."
 
     except Exception as e:
-        logger.error(f"STT transcription error: {e}")
-        return ""
+        logger.exception("STT error: %s", e)
+        return "Sorry, I could not understand the audio."
