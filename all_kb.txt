@@ -14229,3 +14229,17 @@ We're thrilled to share that our talented IRS team proudly represented our insti
 --- Avionics Department in Collaboration with IST Robotics Society Conducted  a Successful 2-Day RC Aircraft Design Workshop ---
 Avionics Department, in collaboration with IRS Society, successfully conducted a 2-Day RC Aircraft Design Workshop at Westminster Academy, Islamabad on 16–17 February. The workshop provided students with hands-on exposure to RC aircraft design fundamentals, aerodynamics concepts, and practical building techniques. Participants actively engaged in learning, designing, and understanding the real-world applications of avionics engineering. It was an exciting experience to inspire young minds towards innovation, technology, and aviation.
 News and Activities
+
+======================================================================
+## KICSIT DIRECTOR & MERIT SCHOLARSHIPS (VOICE FAQ)
+======================================================================
+
+=== KICSIT / DIRECTOR (NOT KARACHI CITY) ===
+Q: Who is the director of KICSIT? Engr. Masood Khalid is Director Incharge of KICSIT (Dr. A. Q. Khan Institute of Computer Sciences and Information Technology). KICSIT is an IST campus at Kahuta — Sumbal Gah Kahuta, District Rawalpindi — it is not located in Karachi city.
+Q: Karachi campus KICSIT director? Many people say Karachi but KICSIT is the Kahuta campus of IST. Director Incharge: Engr. Masood Khalid. Contact 051-9285059, 051-9285187, info@kicsit.edu.pk.
+Q: IST Karachi director? For RS and GIS programs IST historically used National Centre facilities linked to Karachi; KICSIT computer campus is at Kahuta with Director Incharge Engr. Masood Khalid.
+
+=== MERIT SCHOLARSHIP — RANK VS MINIMUM GPA ===
+Q: Merit scholarship GPA rule BS? IST awards up to three merit scholarships per undergraduate discipline per policy; 1st 2nd 3rd positions get fee waivers; minimum SGPA is stated in the policy table (often above 3.50 for continuing semesters). Scholarships are competitive: you must meet the minimum SGPA AND rank among the top position-holders in your discipline — meeting the minimum alone does not guarantee an award.
+Q: Merit scholarship GPA rule MS? IST awards up to two merit scholarships per MS discipline per published policy. Policy states minimum SGPA and CGPA thresholds for each tier; if your GPA is higher than the published minimum, you meet that eligibility requirement; actual awards still go to the top-ranked eligible students each semester, not automatically to everyone above the floor.
+Q: If my GPA is 4.0 and minimum is 3.75 do I get MS merit scholarship? A 4.0 GPA satisfies a minimum stated as above 3.75; merit scholarships are limited to top 1st and 2nd position-holders per MS discipline per policy, so explain eligibility plus rank-based selection — do not say the student is ineligible solely because of a wrong comparison.

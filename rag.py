@@ -10,18 +10,56 @@ Scoring: BM25 on CLEANED text (TOPIC labels stripped before indexing).
          FAQ lines get a boost to counteract length-normalisation penalty.
 """
 import re
-import math
 import logging
-from collections import Counter
+
+from rag_kb_loader import build_kb_index, bm25_score as _bm25_loader
 
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. Load KB
+# 1. KB index (rebuilt by reload_kb() after ist_kb_sync updates all_kb.txt)
 # ─────────────────────────────────────────────────────────────────────────────
 
-with open("all_kb.txt", "r", encoding="utf-8") as _f:
-    _RAW = _f.read()
+_RAW: str = ""
+_faq_chunks: list[str] = []
+_data_chunks: list[str] = []
+_body_chunks: list[str] = []
+chunks: list[str] = []
+_n_faq: int = 0
+_n_short: int = 0
+_idx_toks: list[list[str]] = []
+_chunk_len: list[int] = []
+_N: int = 0
+_avgdl: float = 0.0
+_df = None  # Counter
+
+
+def _apply_kb_index(idx) -> None:
+    global _RAW, _faq_chunks, _data_chunks, _body_chunks, chunks, _n_faq, _n_short
+    global _idx_toks, _chunk_len, _N, _avgdl, _df
+    _RAW = idx.raw
+    _faq_chunks = idx.faq_chunks
+    _data_chunks = idx.data_chunks
+    _body_chunks = idx.body_chunks
+    chunks = idx.chunks
+    _n_faq = idx.n_faq
+    _n_short = idx.n_short
+    _idx_toks = idx.idx_toks
+    _chunk_len = idx.chunk_len
+    _N = idx.n
+    _avgdl = idx.avgdl
+    _df = idx.df
+
+
+def reload_kb(path: str = "all_kb.txt") -> None:
+    """Re-read all_kb.txt and rebuild BM25 index (after ist_kb_sync)."""
+    with open(path, encoding="utf-8") as f:
+        raw = f.read()
+    _apply_kb_index(build_kb_index(raw))
+    logger.info("KB reloaded from %s", path)
+
+
+_apply_kb_index(build_kb_index(open("all_kb.txt", encoding="utf-8").read()))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. Helpers
@@ -33,188 +71,16 @@ def _clean_markers(text: str) -> str:
     t = re.sub(r"(PAGE|TOPIC)\s*:\s*[^\n]*\n?", "", t)
     return t.strip()
 
-def _is_nav_block(text: str) -> bool:
-    """True when >55 % of non-empty lines are bare nav link labels (no punctuation)."""
-    lines = [l.strip() for l in text.splitlines() if l.strip()]
-    if not lines:
-        return True
-    nav_like = sum(1 for l in lines if len(l) < 55 and not any(c in l for c in ".?:,()@+"))
-    return (nav_like / len(lines)) > 0.55
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 3. Build chunk pool
-# ─────────────────────────────────────────────────────────────────────────────
-
-_faq_chunks:  list[str] = []   # individual Q&A lines from === sections
-_data_chunks: list[str] = []   # paragraph blocks from ## sections
-_body_chunks: list[str] = []   # scraped TOPIC blocks
-
-_FAQ_END = "## PROGRAMS AND ADMISSIONS DATA"
-_faq_raw  = _RAW.split(_FAQ_END)[0]
-
-# ── 3a. === FAQ sections: one chunk per Q&A line ─────────────────────────────
-_in_faq_section = False
-for _line in _faq_raw.splitlines():
-    s = _line.strip()
-    if re.match(r"^=== .+ ===$", s):
-        _in_faq_section = True
-        continue
-    if s.startswith("## "):
-        _in_faq_section = False
-
-    if _in_faq_section:
-        if len(s) > 40 and any(c in s for c in ".?:()"):
-            _faq_chunks.append(s)
-
-# ── 3b. ## data sections: paragraph chunks (keeps label + data together) ─────
-_in_data_section = False
-_current_data_lines: list[str] = []
-
-_current_dept_label = ""   # tracks "DEPARTMENT: Computing" for labelling sub-paragraphs
-
-def _flush_data_para(lines: list[str]) -> None:
-    global _current_dept_label
-    para = "\n".join(lines).strip()
-    if not para or len(para) < 50 or _is_nav_block(para):
-        return
-    # Sub-split on DEPARTMENT: so each dept is its own chunk
-    dept_blocks = re.split(r"(?=^DEPARTMENT:)", para, flags=re.MULTILINE)
-    for block in dept_blocks:
-        b = block.strip()
-        if not b or len(b) < 50 or _is_nav_block(b):
-            continue
-        # Update current dept label when we hit a DEPARTMENT: block
-        dept_match = re.match(r"DEPARTMENT: (.+)", b)
-        if dept_match:
-            _current_dept_label = b   # the whole dept header block
-        elif _current_dept_label:
-            # Prepend department context so "Benish Amin" chunk knows it belongs to Computing
-            b = f"{_current_dept_label}\n---\n{b}"
-        _data_chunks.append(b)
-
-for _line in _faq_raw.splitlines():
-    s = _line.strip()
-    if re.match(r"^=== .+ ===$", s):
-        if _current_data_lines:
-            _flush_data_para(_current_data_lines)
-            _current_data_lines = []
-        _in_data_section = False
-        _current_dept_label = ""
-        continue
-    if s.startswith("## "):
-        if _current_data_lines:
-            _flush_data_para(_current_data_lines)
-            _current_data_lines = []
-        _in_data_section = True
-        _current_dept_label = ""
-        continue
-    # === separators within data sections = paragraph boundary
-    if s.startswith("==="):
-        if _in_data_section and _current_data_lines:
-            _flush_data_para(_current_data_lines)
-            _current_data_lines = []
-        _current_dept_label = ""
-        continue
-
-    if _in_data_section:
-        if s:
-            _current_data_lines.append(s)
-        else:
-            if _current_data_lines:
-                _flush_data_para(_current_data_lines)
-                _current_data_lines = []
-
-if _current_data_lines:
-    _flush_data_para(_current_data_lines)
-
-# ── 3c. Scraped body — split on all page-break patterns ──────────────────────
-_scraped_raw = _RAW[_RAW.find(_FAQ_END):]
-
-def _split_scraped(text: str) -> list[str]:
-    blocks: list[str] = []
-    for piece in re.split(r"={10,}", text):
-        p = re.sub(r"^(PAGE\s*:\s*[^\n]*\n|TOPIC\s*:\s*[^\n]*\n)+", "", piece.strip()).strip()
-        if not p or len(p) < 60:
-            continue
-        for sp in re.split(r"(?=\[TOPIC:)", p):
-            sp = sp.strip()
-            if not sp or len(sp) < 60:
-                continue
-            for ssp in re.split(r"\n---[^-\n]{1,60}---\n", sp):
-                ssp = ssp.strip()
-                if len(ssp) >= 60 and not _is_nav_block(ssp):
-                    blocks.append(ssp)
-    return blocks
-
-_body_chunks = _split_scraped(_scraped_raw)
-
-# ── 3d. Deduplicate ───────────────────────────────────────────────────────────
-def _dedup(lst: list[str]) -> list[str]:
-    seen: set[str] = set()
-    out:  list[str] = []
-    for c in lst:
-        key = c[:120].strip()
-        if key not in seen:
-            seen.add(key)
-            out.append(c)
-    return out
-
-_faq_chunks  = _dedup(_faq_chunks)
-_data_chunks = _dedup(_data_chunks)
-_body_chunks = _dedup(_body_chunks)
-
-# Final pool: FAQ lines first, then data blocks, then scraped body
-chunks:  list[str] = _faq_chunks + _data_chunks + _body_chunks
-_n_faq   = len(_faq_chunks)
-_n_short = len(_faq_chunks) + len(_data_chunks)   # FAQ + data share higher boost
-
-logger.info("RAG: %d FAQ + %d data + %d body = %d total",
-            len(_faq_chunks), len(_data_chunks), len(_body_chunks), len(chunks))
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 4. BM25 index  — built on CLEANED text so [TOPIC:] metadata doesn't pollute
-# ─────────────────────────────────────────────────────────────────────────────
-
-_K1 = 1.5
-_B  = 0.75
-_FAQ_BOOST  = 2.2   # Short precise FAQ lines penalised by length-norm; restore balance
-_DATA_BOOST = 1.6   # Structured ## data blocks (contact cards, fee tables)
-
 def _tok(text: str) -> list[str]:
     return re.findall(r"\b[a-z0-9]{2,}\b", text.lower())
 
-# Index on cleaned text (no [TOPIC:] noise)
-_idx_toks: list[list[str]] = [_tok(_clean_markers(c)) for c in chunks]
-_chunk_len: list[int]       = [len(t) for t in _idx_toks]
-_N         = len(chunks)
-_avgdl     = sum(_chunk_len) / max(_N, 1)
-
-_df: dict[str, int] = Counter()
-for _tl in _idx_toks:
-    for _t in set(_tl):
-        _df[_t] += 1
-
-def _idf(term: str) -> float:
-    df = _df.get(term, 0)
-    return math.log((_N - df + 0.5) / (df + 0.5) + 1)
 
 def _bm25(q_toks: list[str], i: int) -> float:
-    tf_map = Counter(_idx_toks[i])
-    dl     = _chunk_len[i]
-    score  = 0.0
-    for t in q_toks:
-        tf = tf_map.get(t, 0)
-        if tf == 0:
-            continue
-        score += _idf(t) * (tf * (_K1 + 1)) / (tf + _K1 * (1 - _B + _B * dl / _avgdl))
-    if i < _n_faq:
-        score *= _FAQ_BOOST
-    elif i < _n_short:
-        score *= _DATA_BOOST
-    return score
+    return _bm25_loader(q_toks, i, _idx_toks, _chunk_len, _N, _avgdl, _df, _n_faq, _n_short)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5. Query expansion
+# 3. Query expansion
 # ─────────────────────────────────────────────────────────────────────────────
 
 _SYN: dict[str, list[str]] = {
@@ -241,6 +107,8 @@ _SYN: dict[str, list[str]] = {
     "good":        ["good", "accredited", "recognized", "quality", "ranking",
                     "reputation", "hec", "pec", "washington", "nceac"],
     "university":  ["university", "institute", "ist", "accredited", "chartered"],
+    "karachi":     ["karachi", "kicsit", "kahuta", "campus", "director", "krl"],
+    "kicsit":      ["kicsit", "kahuta", "karachi", "director", "campus", "incharge"],
 }
 
 def _expand(query: str) -> list[str]:
@@ -256,7 +124,7 @@ def _expand(query: str) -> list[str]:
 # 6. Retrieve
 # ─────────────────────────────────────────────────────────────────────────────
 
-TOP_K = 12
+TOP_K = 10
 
 def retrieve(query: str) -> str:
     q_toks = _expand(query)
@@ -273,7 +141,6 @@ def retrieve(query: str) -> str:
         t = _clean_markers(chunks[i])
         if len(t) < 40:
             continue
-        # Deduplicate: skip if same opening content already in results
         key = t[:80].strip()
         if key in seen_keys:
             continue
@@ -288,7 +155,8 @@ def retrieve(query: str) -> str:
 
 _END_CALL_RE = re.compile(
     r"\b(bye|goodbye|end call|end the call|that'?s all|nothing else|"
-    r"no more questions|that will be all|khuda hafiz|allah hafiz)\b",
+    r"no more questions|that will be all|khuda hafiz|allah hafiz|"
+    r"خدا حافظ|اللہ حافظ|شکریہ بائے)\b",
     re.I,
 )
 
@@ -298,13 +166,16 @@ def _is_end_call(txt: str) -> bool:
 
 def _is_thank_you(txt: str) -> bool:
     t = txt.lower().strip()
-    return len(t) < 60 and any(x in t for x in ["thank you", "thanks", "thankyou", "shukriya", "shukria"])
+    return len(t) < 60 and any(x in t for x in [
+        "thank you", "thanks", "thankyou",
+        "shukriya", "shukria", "شکریہ", "بہت شکریہ",
+    ])
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 8. System prompt
+# 8. System prompts  (English + Urdu)
 # ─────────────────────────────────────────────────────────────────────────────
 
-_SYSTEM = """You are the IST (Institute of Space Technology) admissions helpline assistant on a live phone call.
+_SYSTEM_EN = """You are the IST (Institute of Space Technology) admissions helpline assistant on a live phone call.
 
 RULES:
 1. Use the provided context as your PRIMARY source. Always prefer context over general knowledge.
@@ -318,36 +189,97 @@ RULES:
 6. For fee questions: give the specific program's total per-semester amount; state the actual figure.
 7. For faculty questions: list the faculty members found in context by name and designation.
 8. INTELLIGENT FALLBACK — if the context does not contain the answer:
-   - For yes/no questions (e.g. "Is IST good?", "Is IST better than NUST?"): answer yes or no using your general knowledge about IST, then add one sentence of context.
-   - For factual questions you know the answer to: answer briefly and naturally.
-   - Only say "I don't have that detail" for very specific data (exact dates, specific figures, names) that you genuinely don't know. In that case add: "You can contact IST admissions at 051-9075100 or email admissions@ist.edu.pk."
-9. Speak naturally as if on a phone call. Do not start with "Based on the context" or similar."""
+   - For yes/no questions: answer yes or no using your general knowledge about IST.
+   - For factual questions you know: answer briefly and naturally.
+   - Only say "I don't have that detail" for very specific data you genuinely don't know. Then add: "You can contact IST admissions at 051-9075100 or email admissions@ist.edu.pk."
+9. Speak naturally as if on a phone call. Do not start with "Based on the context".
+10. Never begin with meta phrases like "The answer to your question is" or "The answer is that" — start directly with the information.
+11. MERIT SCHOLARSHIPS — use ONLY figures and rules from context. Awards are rank-based (e.g. top three per BS discipline, top two per MS program in context): explain that eligible students must meet published minimum SGPA/CGPA AND compete for limited positions. If the caller gives a GPA and context gives a minimum threshold, compare correctly: e.g. 4.0 is above 3.75 — do NOT say they fail eligibility. Never invent GPA cutoffs not in context. Never tell someone they "cannot" get a merit scholarship just because you mis-compare numbers; say they meet the stated minimum if they do, and that final awards depend on semester ranking among eligible students.
+12. KICSIT — context says KICSIT is at Kahuta (Rawalpindi area), not Karachi city. Director Incharge named in context is Engr. Masood Khalid. If the user says "Karachi campus" for KICSIT, politely clarify location and give the director from context."""
+
+_SYSTEM_UR = """آپ IST (Institute of Space Technology) کے admissions helpline assistant ہیں اور ایک live phone call پر ہیں۔
+
+اہم ہدایات:
+1. جواب دینے کے لیے فراہم کردہ context کو بنیاد بنائیں۔
+2. ہمیشہ صاف اور قدرتی اردو میں جواب دیں — یہ voice call ہے، اس لیے 2 سے 4 جملے کافی ہیں۔
+3. Bullet points، numbered lists، یا markdown استعمال نہ کریں۔
+4. "[TOPIC:]" یا "PAGE:" جیسے internal labels کبھی نہ بولیں۔
+5. Technical terms جیسے BS، MS، NAT، ECAT، fee structure، merit list، GPA وغیرہ انگریزی میں رکھیں — باقی سب اردو میں بولیں۔
+6. اگر context میں contact details موجود ہوں تو ضرور بتائیں:
+   - Transport سوالات → 03000544707 نمبر بتائیں۔
+   - Fee سوالات → کل per-semester رقم اور one-time charges بتائیں۔
+   - Personnel سوالات → phone اور email بتائیں۔
+7. اگر context میں جواب نہ ہو تو کہیں: "مجھے ابھی یہ تفصیل نہیں ملی۔ براہ کرم IST admissions سے 051-9075100 پر رابطہ کریں یا admissions@ist.edu.pk پر email کریں۔"
+8. قدرتی انداز میں بات کریں جیسے phone پر کرتے ہیں۔ "Based on the context" جیسے جملوں سے گریز کریں۔
+9. جواب براہ راست شروع کریں — کبھی بھی "آپ کی پوچھ گئی بات کا جواب یہ ہے کہ"، "جواب یہ ہے کہ"، "آپ کے سوال کا جواب یہ ہے کہ" جیسے filler جملے نہ بولیں۔
+10. MERIT SCHOLARSHIP — context میں جو minimum SGPA/CGPA لکھا ہے اسی کو استعمال کریں۔ اگر caller کا GPA minimum سے زیادہ یا برابر ہے تو کہیں کہ وہ minimum پورا کرتا ہے؛ غلطی سے یہ نہ کہیں کہ وہ اہل نہیں۔ merit scholarship محدود اوپر کی positions پر rank/position کی بنیاد پر ملتی ہے (فی discipline اوپر کے طلباء) — ہر eligible شخص کو خودکار طور پر نہیں ملتی۔
+11. KICSIT — context کے مطابق KICSIT کا campus Kahuta پر ہے، Karachi شہر میں نہیں۔ Director Incharge: Engr. Masood Khalid (نام context سے)۔ اگر user "Karachi campus" کہے تو نرمی سے وضاحت کریں اور director بتائیں۔"""
+
+# Remove LLM filler intros if they still appear (Roman Urdu / spelling variants)
+_UR_META_PREFIX = re.compile(
+    r"^\s*(آپ کی پوچھ[ئیے]\s*گئ[ئیے]\s*بات کا جواب یہ ہے کہ\s*|"
+    r"آپ کے سوال کا جواب یہ ہے کہ\s*|"
+    r"آپ کے سوال کا مختصر جواب یہ ہے کہ\s*|"
+    r"جواب یہ ہے کہ\s*)",
+)
+_EN_META_PREFIX = re.compile(
+    r"^\s*(The answer to your question is that\s*|The answer to your question is\s*|The answer is that\s*)",
+    re.I,
+)
+
+
+def _strip_voice_meta_filler(text: str, language: str) -> str:
+    t = (text or "").strip()
+    if not t:
+        return t
+    if language == "ur":
+        t = _UR_META_PREFIX.sub("", t).strip()
+    else:
+        t = _EN_META_PREFIX.sub("", t).strip()
+    return t
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 9. Main entry point
 # ─────────────────────────────────────────────────────────────────────────────
 
-def answer_question(question: str, history: list[dict] | None = None):
+def answer_question(
+    question: str,
+    history:  list[dict] | None = None,
+    language: str = "en",
+) -> tuple[str, str]:
     """
     Returns (kind, reply_text).
-    kind  = "__REPLY__" | "__END_CALL__"
-    history = list of {"role": "user"|"assistant", "content": "..."} from this call.
+    kind     = "__REPLY__" | "__END_CALL__"
+    history  = list of {"role": "user"|"assistant", "content": "..."} for this call.
+    language = "en" or "ur"
     """
     q = question.strip()
 
     if _is_end_call(q):
-        return ("__END_CALL__", "Thank you for calling Institute of Space Technology. Goodbye!")
+        msg = (
+            "شکریہ! IST admissions helpline استعمال کرنے کا۔ خدا حافظ!"
+            if language == "ur"
+            else "Thank you for calling Institute of Space Technology. Goodbye!"
+        )
+        return ("__END_CALL__", msg)
 
     if _is_thank_you(q):
-        return ("__REPLY__", "You're welcome. Is there anything else I can help you with?")
+        msg = (
+            "آپ کا شکریہ! کیا کوئی اور سوال ہے؟"
+            if language == "ur"
+            else "You're welcome. Is there anything else I can help you with?"
+        )
+        return ("__REPLY__", msg)
 
     context = retrieve(q)
+    system  = _SYSTEM_UR if language == "ur" else _SYSTEM_EN
 
     try:
         from groq_utils import get_client
         client = get_client()
 
-        messages: list[dict] = [{"role": "system", "content": _SYSTEM}]
+        messages: list[dict] = [{"role": "system", "content": system}]
         if history:
             messages.extend(history[-6:])
         messages.append({
@@ -358,12 +290,13 @@ def answer_question(question: str, history: list[dict] | None = None):
         resp = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=messages,
-            max_tokens=300,
+            max_tokens=220,
             temperature=0.1,
         )
         reply = resp.choices[0].message.content.strip()
         reply = re.sub(r"\[TOPIC:[^\]]+\]\s*", "", reply).strip()
         reply = re.sub(r"(PAGE|TOPIC)\s*:\s*[^\n]*", "", reply).strip()
+        reply = _strip_voice_meta_filler(reply, language)
         if not reply:
             raise ValueError("empty reply")
         return ("__REPLY__", reply)
@@ -372,6 +305,10 @@ def answer_question(question: str, history: list[dict] | None = None):
         logger.exception("LLM call failed: %s", exc)
         fallback = next(
             (l.strip() for l in context.splitlines() if len(l.strip()) > 60),
-            "I'm sorry, I couldn't retrieve that. Please contact IST at 051-9075100.",
+            (
+                "معاف کیجیے، معلومات نہیں مل سکی۔ براہ کرم 051-9075100 پر رابطہ کریں۔"
+                if language == "ur"
+                else "I'm sorry, I couldn't retrieve that. Please contact IST at 051-9075100."
+            ),
         )
         return ("__REPLY__", fallback)

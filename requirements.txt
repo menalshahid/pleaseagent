@@ -2,3 +2,5 @@ flask
 edge-tts
 groq
 gunicorn[gevent]
+python-dotenv
+trafilatura
