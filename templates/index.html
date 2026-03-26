@@ -6,6 +6,11 @@
   <meta name="theme-color" content="#0f172a" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="IST AI Admissions" />
+  
+  <!-- Prevent iOS zoom on input focus -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  
   <title>IST AI Admissions Call</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -21,40 +26,73 @@
       --text-muted: #94a3b8;
       --border: #475569;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+    }
+    
+    html, body {
+      height: 100%;
+      height: 100vh;
+      height: 100dvh; /* For mobile browsers with dynamic viewport */
+      overflow: hidden;
+    }
+    
     body {
       font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
       background: var(--bg);
       color: var(--text);
-      min-height: 100vh;
-      min-height: -webkit-fill-available;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       padding: 1.5rem;
       padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
-      -webkit-tap-highlight-color: transparent;
-      -webkit-touch-callout: none;
+      padding-left: max(1.5rem, env(safe-area-inset-left));
+      padding-right: max(1.5rem, env(safe-area-inset-right));
+      -webkit-user-select: none;
+      user-select: none;
+      position: fixed;
+      width: 100%;
+      top: 0;
+      left: 0;
     }
 
     .container {
       width: 100%;
       max-width: 480px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
 
     .header {
       text-align: center;
-      margin-bottom: 2rem;
+      margin-bottom: 1rem;
+      flex-shrink: 0;
     }
-    .header h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem; }
-    .header p { color: var(--text-muted); font-size: 0.9375rem; }
+    .header h1 { 
+      font-size: 1.5rem; 
+      font-weight: 700; 
+      margin-bottom: 0.25rem; 
+    }
+    .header p { 
+      color: var(--text-muted); 
+      font-size: 0.9375rem; 
+    }
 
     .controls {
       display: flex;
       gap: 1rem;
       justify-content: center;
-      margin-bottom: 2rem;
+      margin-bottom: 1rem;
+      flex-shrink: 0;
+      flex-wrap: wrap;
     }
 
     .btn {
@@ -62,53 +100,90 @@
       align-items: center;
       justify-content: center;
       gap: 0.5rem;
-      padding: 1rem 1.75rem;
+      padding: 0.875rem 1.5rem;
       min-height: 48px;
-      min-width: 120px;
+      min-width: 110px;
       border: none;
       border-radius: 12px;
       font-family: inherit;
       font-size: 1rem;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.15s;
+      transition: all 0.15s ease;
       touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
+      -webkit-appearance: none;
+      appearance: none;
+      -webkit-user-select: none;
+      user-select: none;
     }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn svg { width: 1.25rem; height: 1.25rem; }
+    .btn:disabled { 
+      opacity: 0.5; 
+      cursor: not-allowed; 
+    }
+    .btn:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+    .btn svg { 
+      width: 1.25rem; 
+      height: 1.25rem; 
+      flex-shrink: 0;
+    }
 
     .btn-start {
       background: var(--green);
       color: white;
     }
-    .btn-start:hover:not(:disabled) { background: var(--green-hover); transform: translateY(-1px); }
+    .btn-start:hover:not(:disabled) { 
+      background: var(--green-hover); 
+    }
 
     .btn-end {
       background: var(--red);
       color: white;
     }
-    .btn-end:hover:not(:disabled) { background: var(--red-hover); transform: translateY(-1px); }
+    .btn-end:hover:not(:disabled) { 
+      background: var(--red-hover); 
+    }
 
     .status {
       text-align: center;
       padding: 0.75rem;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1rem;
       border-radius: 10px;
       font-size: 0.9375rem;
       font-weight: 500;
       background: var(--surface);
       border: 1px solid var(--border);
+      color: var(--text);
+      flex-shrink: 0;
+      word-wrap: break-word;
+      word-break: break-word;
     }
-    .status.listening { background: rgba(16, 185, 129, 0.12); border-color: var(--green); color: var(--green); }
-    .status.processing { background: rgba(99, 102, 241, 0.12); border-color: #6366f1; color: #a5b4fc; }
-    .status.speaking { background: rgba(99, 102, 241, 0.12); border-color: #6366f1; color: #a5b4fc; }
+    .status.listening { 
+      background: rgba(16, 185, 129, 0.12); 
+      border-color: var(--green); 
+      color: var(--green); 
+    }
+    .status.processing { 
+      background: rgba(99, 102, 241, 0.12); 
+      border-color: #6366f1; 
+      color: #a5b4fc; 
+    }
+    .status.speaking { 
+      background: rgba(99, 102, 241, 0.12); 
+      border-color: #6366f1; 
+      color: #a5b4fc; 
+    }
 
     .transcript-panel {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 12px;
       overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 200px;
     }
     .transcript-panel h3 {
       padding: 0.875rem 1rem;
@@ -119,19 +194,31 @@
       color: var(--text-muted);
       background: var(--surface2);
       border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
     }
     .transcript-list {
-      max-height: 320px;
+      flex: 1;
       overflow-y: auto;
       padding: 1rem;
+      -webkit-overflow-scrolling: touch;
     }
-    .transcript-list::-webkit-scrollbar { width: 6px; }
-    .transcript-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    .transcript-list::-webkit-scrollbar { 
+      width: 6px; 
+    }
+    .transcript-list::-webkit-scrollbar-thumb { 
+      background: var(--border); 
+      border-radius: 3px; 
+    }
 
     .entry {
       margin-bottom: 1rem;
+      word-wrap: break-word;
+      word-break: break-word;
+      overflow-wrap: break-word;
     }
-    .entry:last-child { margin-bottom: 0; }
+    .entry:last-child { 
+      margin-bottom: 0; 
+    }
     .entry .role {
       font-size: 0.75rem;
       font-weight: 600;
@@ -139,18 +226,64 @@
       letter-spacing: 0.04em;
       margin-bottom: 0.35rem;
     }
-    .entry.you .role { color: var(--green); }
-    .entry.agent .role { color: #6366f1; }
+    .entry.you .role { 
+      color: var(--green); 
+    }
+    .entry.agent .role { 
+      color: #6366f1; 
+    }
     .entry .content {
       font-size: 0.9375rem;
       line-height: 1.5;
       color: var(--text);
+      word-wrap: break-word;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      white-space: pre-wrap;
     }
     .empty-state {
       color: var(--text-muted);
       font-size: 0.875rem;
       text-align: center;
       padding: 2rem 1rem;
+    }
+    
+    /* Mobile-specific fixes */
+    @media (max-width: 640px) {
+      body {
+        padding: 1rem;
+        padding-bottom: max(1rem, env(safe-area-inset-bottom));
+      }
+      .header {
+        margin-bottom: 0.75rem;
+      }
+      .header h1 {
+        font-size: 1.25rem;
+      }
+      .header p {
+        font-size: 0.875rem;
+      }
+      .controls {
+        margin-bottom: 0.75rem;
+        gap: 0.75rem;
+      }
+      .btn {
+        padding: 0.75rem 1.25rem;
+        font-size: 0.95rem;
+      }
+      .status {
+        margin-bottom: 0.75rem;
+      }
+    }
+    
+    /* iOS safe area */
+    @supports (padding: max(0px)) {
+      body {
+        padding-left: max(1.5rem, env(safe-area-inset-left));
+        padding-right: max(1.5rem, env(safe-area-inset-right));
+        padding-top: max(1.5rem, env(safe-area-inset-top));
+        padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+      }
     }
   </style>
 </head>

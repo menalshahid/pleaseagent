@@ -43,12 +43,22 @@ def _detect_language(text: str) -> str | None:
 # ── TTS helper ────────────────────────────────────────────────────────────────
 
 def _speak(text: str, lang: str = "en") -> str | None:
-    """Sanitise and generate TTS. Returns audio URL or None."""
-    clean = re.sub(r"\[TOPIC:[^\]]*\]\s*", "", text).strip()
-    clean = re.sub(r"(PAGE|TOPIC)\s*:\s*[^\n]*", "", clean).strip()
-    if len(clean) > 500:
-        clean = clean[:497] + "..."
-    return generate_tts(clean, language=lang)
+    """
+    Sanitise and generate TTS. Returns audio URL or None.
+    CRITICAL: Only remove metadata markers, NEVER corrupt Urdu text.
+    """
+    t = str(text).strip()
+    
+    # Remove ONLY metadata markers - preserve all content
+    t = re.sub(r'\[TOPIC:[^\]]*\]\s*', '', t)
+    t = re.sub(r'^(PAGE|TOPIC)\s*:\s*[^\n]*\n?', '', t, flags=re.MULTILINE)
+    
+    # Safety: truncate if too long (but don't use ... for Urdu, use nothing)
+    if len(t) > 500:
+        t = t[:500]
+    
+    result = generate_tts(t, language=lang)
+    return result
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Routes

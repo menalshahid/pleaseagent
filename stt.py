@@ -5,6 +5,10 @@ Language modes
 language=None  →  auto-detect (language-selection turn only), whisper-large-v3-turbo
 language="en"  →  force English, turbo
 language="ur"  →  force Urdu, turbo (same model family as English — faster than old large-v3)
+
+Mobile compatibility:
+- Accepts webm, mp4, wav, ogg from MediaRecorder
+- Urdu prompts and context to improve recognition
 """
 import os
 import re
@@ -14,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def transcribe_audio(audio_file, language: str | None = None) -> str:
-    """Transcribe audio from browser MediaRecorder (webm/m4a/ogg).
+    """Transcribe audio from browser MediaRecorder (webm/m4a/ogg/wav/mp4).
     language: 'en', 'ur', or None (auto-detect)
     """
     api_key = (
@@ -38,6 +42,8 @@ def transcribe_audio(audio_file, language: str | None = None) -> str:
         if not fn or "." not in fn:
             fn = "audio.webm"
 
+        logger.info("STT [lang=%s, file=%s, size=%d bytes]", language, fn, len(data))
+
         if language == "en":
             transcription = client.audio.transcriptions.create(
                 file=(fn, data),
@@ -46,7 +52,8 @@ def transcribe_audio(audio_file, language: str | None = None) -> str:
                 prompt=(
                     "IST Institute of Space Technology. BS Bachelor of Science. "
                     "Admissions, fee structure, transport, faculty, "
-                    "electrical engineering, computer science."
+                    "electrical engineering, computer science, "
+                    "department, program, engineering, Pakistan."
                 ),
             )
         elif language == "ur":
@@ -57,7 +64,8 @@ def transcribe_audio(audio_file, language: str | None = None) -> str:
                 language="ur",
                 prompt=(
                     "IST Institute of Space Technology. "
-                    "BS اور MS، fee structure، admissions، transport، faculty۔"
+                    "BS اور MS، fee structure، admissions، transport، faculty۔ "
+                    "انجینئرنگ، کمپیوٹر سائنس، الیکٹرانکس، اردو، پاکستان۔"
                 ),
             )
         else:
@@ -67,7 +75,7 @@ def transcribe_audio(audio_file, language: str | None = None) -> str:
                 model="whisper-large-v3-turbo",
                 prompt=(
                     "IST Institute of Space Technology. English or Urdu. "
-                    "BS اور MS پروگرام، fee، admissions۔"
+                    "BS اور MS پروگرام، fee، admissions۔ انگریزی یا اردو۔"
                 ),
             )
 
@@ -85,9 +93,20 @@ def transcribe_audio(audio_file, language: str | None = None) -> str:
             ):
                 text = re.sub(r"\bP\s*S\b", "BS", text, flags=re.I)
 
-        logger.info("STT [lang=%s]: %s", language, repr(text)[:80])
+        # ── Urdu: PRESERVE all text, minimal post-processing ────────────────
+        # Do NOT modify Urdu transcriptions - they're usually correct from Whisper
+
+        logger.info("STT [lang=%s, result]: %s", language, repr(text)[:100])
         return text or "Sorry, I could not understand the audio."
 
     except Exception as e:
-        logger.exception("STT error: %s", e)
-        return "Sorry, I could not understand the audio."
+        logger.exception("STT error [lang=%s]: %s", language, e)
+        error_msg = str(e).lower()
+        
+        # Provide specific error messages
+        if "authentication" in error_msg or "api_key" in error_msg:
+            return "Sorry, the speech service is not configured properly."
+        elif "timeout" in error_msg or "connection" in error_msg:
+            return "Sorry, the connection timed out. Please try again."
+        else:
+            return "Sorry, I could not understand the audio. Please try again."
