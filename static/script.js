@@ -95,11 +95,40 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// iOS audio unlock helper
+// On iOS Safari the audio autoplay policy is tied to a synchronous user-gesture
+// chain.  Any `await` (network I/O) BEFORE audio.play() severs that chain and
+// causes play() to fail silently.  Calling unlockAudio() synchronously at the
+// START of the click handler (before the first await) keeps the audio session
+// alive for all subsequent plays in this call.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function unlockAudio() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const buf = ctx.createBuffer(1, 1, 22050);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start(0);
+    ctx.resume().catch(() => {});
+  } catch (e) {
+    // Non-fatal — ignore if AudioContext not supported
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Call control
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function startCall() {
   if (callActive) return;
+
+  // MUST unlock audio BEFORE any await — iOS Safari loses the user-gesture
+  // audio context as soon as the first asynchronous hop (network request) occurs.
+  unlockAudio();
 
   try {
     startBtn.disabled = true;
@@ -124,6 +153,10 @@ async function startCall() {
     try {
       const greetingResp = await fetch("/api/greeting");
       const greetingData = await greetingResp.json();
+      // Always show greeting text so the user knows what to say
+      if (greetingData.text) {
+        addTranscript(greetingData.text, "agent");
+      }
       if (greetingData.audio) {
         updateStatus("Speaking... 🔊");
         await playAudio(greetingData.audio);

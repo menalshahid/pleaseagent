@@ -24,6 +24,12 @@ _MAX_HISTORY_TURNS = 10
 _call_history:  list[dict] = []
 _call_language: str | None = None   # None = not selected yet, "en" or "ur" once chosen
 _greeting_audio = None
+_greeting_audio_tried = False  # True after first TTS attempt so we don't retry on every request
+
+_GREETING_TEXT = (
+    "Hello! This is the IST admissions helpline. "
+    "Please say English or Urdu to choose your language."
+)
 
 # ── Language detection ────────────────────────────────────────────────────────
 
@@ -73,23 +79,23 @@ def index():
 def greeting():
     """Return greeting TTS that asks for language selection.
     Played once per call; asks user to say English or Urdu.
+    Returns both the audio URL and the greeting text so the frontend can
+    display the text even when audio playback is unavailable.
     """
-    global _greeting_audio
-    if _greeting_audio is None:
-        _greeting_audio = generate_tts(
-            "Hello! This is the IST admissions helpline. "
-            "Please say English or Urdu to choose your language.",
-            language="en",
-        )
-    return jsonify({"audio": _greeting_audio or ""})
+    global _greeting_audio, _greeting_audio_tried
+    if not _greeting_audio_tried:
+        _greeting_audio_tried = True
+        _greeting_audio = generate_tts(_GREETING_TEXT, language="en")
+    return jsonify({"audio": _greeting_audio or "", "text": _GREETING_TEXT})
 
 
 @app.route("/api/call/end", methods=["POST"])
 def call_end():
     """Reset all per-call state and delete TTS audio files."""
     import glob, os
-    global _greeting_audio, _call_history, _call_language
+    global _greeting_audio, _greeting_audio_tried, _call_history, _call_language
     _greeting_audio = None
+    _greeting_audio_tried = False
     _call_history   = []
     _call_language  = None
     for path in glob.glob("static/audio_*.mp3"):
