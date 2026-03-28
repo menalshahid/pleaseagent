@@ -37,6 +37,23 @@ _URDU_SIGNALS    = ["urdu", "اردو", "urdoo", "urdo", "اردو میں", "urd
 _ENGLISH_SIGNALS = ["english", "انگریزی", "eng ", "inglish", "inglis", "in english",
                     "english mein", "english me"]
 
+# Treat underscores as non-meaningful symbols here (same as punctuation/noise).
+_PUNCT_OR_SYMBOL_ONLY_RE = re.compile(r"^[^A-Za-z0-9]+$", re.UNICODE)
+_MAX_ACCIDENTAL_CAPTURE_LENGTH = 4
+_NON_QUESTION_STT_SNIPPETS = (
+    "you",
+    "thank you",
+    "thanks for watching",
+    "please subscribe",
+    "music",
+    "background music",
+    "applause",
+    "clapping",
+    "noise",
+    "inaudible",
+    "silence",
+)
+
 def _detect_language(text: str) -> str | None:
     """Return 'ur', 'en', or None if choice is unclear."""
     t = text.lower().strip()
@@ -65,6 +82,32 @@ def _speak(text: str, lang: str = "en") -> str | None:
     
     result = generate_tts(t, language=lang)
     return result
+
+
+def _looks_like_noise_or_hallucinated_stt(text: str) -> bool:
+    """Best-effort guard to avoid answering non-questions from noisy captures.
+
+    Heuristics:
+    - empty/whitespace or punctuation/symbol-only transcripts
+    - common filler utterances ("hmm", "umm", etc.)
+    - very short accidental latin snippets (length <= 4)
+    - known non-question/hallucination fragments observed in noisy audio
+    """
+    t = (text or "").strip()
+    if not t:
+        return True
+    if _PUNCT_OR_SYMBOL_ONLY_RE.match(t):
+        return True
+
+    t_lower = t.lower()
+    if t_lower in {"hmm", "hmmm", "umm", "uh", "uhh", "huh", "ok", "okay"}:
+        return True
+
+    # Very short non-language snippets are usually accidental captures.
+    if 1 <= len(t_lower) <= _MAX_ACCIDENTAL_CAPTURE_LENGTH and re.fullmatch(r"[a-z]+", t_lower):
+        return True
+
+    return any(snippet in t_lower for snippet in _NON_QUESTION_STT_SNIPPETS)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Routes
@@ -139,6 +182,20 @@ def call_process():
 
     if not transcript or "sorry" in transcript.lower():
         return jsonify({"transcript": transcript or "", "reply": "", "audio": "", "end_call": False})
+
+    if _looks_like_noise_or_hallucinated_stt(transcript):
+        reprompt = (
+            "معذرت، آواز واضح نہیں آئی۔ براہ کرم سوال دوبارہ واضح طور پر پوچھیں۔"
+            if _call_language == "ur"
+            else "Sorry, I could not hear a clear question. Please ask again."
+        )
+        audio_url = _speak(reprompt, _call_language or "en")
+        return jsonify({
+            "transcript": transcript,
+            "reply": reprompt,
+            "audio": audio_url or "",
+            "end_call": False,
+        })
 
     # ── Language selection turn ───────────────────────────────────────────────
     if _call_language is None:
@@ -218,4 +275,4 @@ def admin_reload_kb():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=os.getenv("FLASK_DEBUG", "").strip().lower() in {"1", "true", "yes"})

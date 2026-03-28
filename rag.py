@@ -111,14 +111,41 @@ _SYN: dict[str, list[str]] = {
     "kicsit":      ["kicsit", "kahuta", "karachi", "director", "campus", "incharge"],
 }
 
+_QUERY_EXPANSION_HINTS: tuple[tuple[str, list[str]], ...] = (
+    # Fee/charges (English + Urdu / Roman Urdu)
+    ("fee structure", ["fee", "structure", "semester", "tuition", "charges"]),
+    ("fees", ["fee", "semester", "tuition", "charges"]),
+    ("fee", ["fee", "semester", "tuition", "charges"]),
+    ("semester", ["semester", "fee", "total"]),
+    ("tuition", ["tuition", "fee", "semester"]),
+    ("فیس", ["fee", "fees", "semester", "tuition", "charges"]),
+    ("چارج", ["charges", "fee", "one-time"]),
+    ("سمسٹر", ["semester", "fee", "total"]),
+    ("سیمیستر", ["semester", "fee", "total"]),
+    ("الیکٹریکل", ["electrical", "engineering", "fee", "semester"]),
+    ("انجینئر", ["engineering", "program", "fee"]),
+    ("کمپیوٹر", ["computer", "computing", "program", "fee"]),
+)
+
 def _expand(query: str) -> list[str]:
     base  = _tok(query)
     extra: list[str] = []
+    ql = query.lower()
     for t in base:
         for syns in _SYN.values():
             if t in syns:
                 extra.extend(syns)
-    return base + extra
+    for needle, hinted in _QUERY_EXPANSION_HINTS:
+        if needle in ql:
+            extra.extend(hinted)
+    # Keep order stable while deduplicating.
+    seen: set[str] = set()
+    out: list[str] = []
+    for tok in (base + extra):
+        if tok not in seen:
+            seen.add(tok)
+            out.append(tok)
+    return out
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 6. Retrieve
