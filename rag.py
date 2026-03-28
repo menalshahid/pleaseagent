@@ -111,7 +111,7 @@ _SYN: dict[str, list[str]] = {
     "kicsit":      ["kicsit", "kahuta", "karachi", "director", "campus", "incharge"],
 }
 
-_QUERY_HINTS: tuple[tuple[str, list[str]], ...] = (
+_QUERY_EXPANSION_HINTS: tuple[tuple[str, list[str]], ...] = (
     # Fee/charges (English + Urdu / Roman Urdu)
     ("fee structure", ["fee", "structure", "semester", "tuition", "charges"]),
     ("fees", ["fee", "semester", "tuition", "charges"]),
@@ -135,7 +135,7 @@ def _expand(query: str) -> list[str]:
         for syns in _SYN.values():
             if t in syns:
                 extra.extend(syns)
-    for needle, hinted in _QUERY_HINTS:
+    for needle, hinted in _QUERY_EXPANSION_HINTS:
         if needle in ql:
             extra.extend(hinted)
     # Keep order stable while deduplicating.
