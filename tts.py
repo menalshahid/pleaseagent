@@ -131,26 +131,43 @@ async def _save_tts_async(communicate, filename: str):
 
 # FALLBACK: If asyncio context is problematic, use synchronous wrapper
 def _get_sync_save():
-    """Create a synchronous save function for edge-tts."""
-    import concurrent.futures
+    """Create a synchronous save function for edge-tts.
+    Runs edge-tts in a background thread with its own event loop so it is
+    compatible with gunicorn + gevent.  Exceptions are propagated back to the
+    caller so that generate_tts_v2 can detect failures reliably.
+    """
     import threading
-    
+
     def sync_save(communicate, filename):
+        result: dict = {"error": None, "done": False}
+
         def _run():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
                 loop.run_until_complete(communicate.save(filename))
+                result["done"] = True
+            except Exception as exc:  # broad catch: edge-tts can raise aiohttp, SSL, OSError, etc.
+                result["error"] = exc
             finally:
                 loop.close()
-        
+
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
         thread.join(timeout=15)  # Wait max 15 seconds
-    
+
+        if thread.is_alive():
+            raise TimeoutError("TTS generation timed out after 15 s")
+        if result["error"] is not None:
+            raise result["error"]
+        # Defensive: guard against abnormal thread exit (e.g., OS signal) that
+        # neither raised an exception nor reached the success path.
+        if not result["done"]:
+            raise RuntimeError("TTS thread finished without saving the file")
+
     return sync_save
 
-# Monkey-patch save method to work synchronously in Flask context
+# Synchronous save helper used by generate_tts_v2
 _sync_save = _get_sync_save()
 
 def generate_tts_v2(text: str, language: str = "en") -> str | None:
@@ -186,6 +203,11 @@ def generate_tts_v2(text: str, language: str = "en") -> str | None:
         # Use sync wrapper
         communicate = edge_tts.Communicate(clean_text, voice)
         _sync_save(communicate, filename)
+
+        # Verify the file was actually written before returning its URL
+        if not os.path.exists(filename) or os.path.getsize(filename) == 0:
+            logger.error("TTS file missing or empty after save: %s", filename)
+            return None
         
         return f"/{filename}".replace("//", "/")
         
