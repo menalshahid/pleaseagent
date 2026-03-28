@@ -6,6 +6,9 @@
  *  3. iOS-safe MIME type detection (mp4 preferred on iOS)
  *  4. Auto-stop timer cleared properly to avoid duplicate stops
  *  5. playAudio never rejects — always resolves so the loop keeps going
+ *  6. sampleRate constraint removed (caused OverconstrainedError on iOS/Android)
+ *  7. getUserMedia fallback to audio:true for restrictive browsers
+ *  8. VAD via Web Audio AnalyserNode — auto-stops after ~2 s of silence
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -23,6 +26,22 @@ let endBtn = null;
 let transcriptList = null;
 let emptyState = null;
 let autoStopTimer = null;   // FIX: track timer so we can clear it
+
+// VAD state
+let audioContext = null;
+let analyser = null;
+let vadSourceNode = null;
+let vadTimeDomainBuf = null;
+let vadInterval = null;
+let voiceDetected = false;
+let silenceStart = null;
+let recordingStartTime = 0;
+
+// VAD configuration
+const VAD_THRESHOLD     = 0.015;  // RMS below this = silence
+const VAD_SILENCE_MS    = 2000;   // ms of continuous silence before auto-stop
+const VAD_MIN_RECORD_MS = 800;    // minimum recording length before VAD may stop it
+const VAD_POLL_MS       = 150;    // how often (ms) to check the audio level
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Platform detection
@@ -105,14 +124,24 @@ async function startCall() {
     startBtn.disabled = true;
     updateStatus("Initializing...");
 
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        sampleRate: 16000,
-      },
-    });
+    // Note: sampleRate omitted — it causes OverconstrainedError on iOS and many
+    // Android devices. echoCancellation/noiseSuppression/autoGainControl are
+    // boolean hints that degrade gracefully on unsupported platforms.
+    const audioConstraints = {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    };
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+    } catch (constraintErr) {
+      // Last resort: minimal constraint for older Android WebViews / restricted browsers
+      console.warn("[IST] getUserMedia with constraints failed, retrying with audio:true:", constraintErr);
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    }
+
+    // Set up AudioContext for VAD — must be called inside a user-gesture handler
+    setupAudioContext(stream);
 
     callActive = true;
     startBtn.style.display = "none";
@@ -152,6 +181,7 @@ async function endCall() {
 
   callActive = false;
   clearAutoStop();
+  stopVAD();
 
   if (mediaRecorder && mediaRecorder.state !== "inactive") {
     mediaRecorder.stop();
@@ -188,9 +218,98 @@ function clearAutoStop() {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// VAD — Voice Activity Detection via Web Audio AnalyserNode
+// ─────────────────────────────────────────────────────────────────────────────
+
+let vadTimeDomainBuf = null;   // reused buffer — allocated once in setupAudioContext
+
+function setupAudioContext(mediaStream) {
+  try {
+    if (!audioContext || audioContext.state === "closed") {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioContext.state === "suspended") {
+      audioContext.resume().catch((e) => {
+        console.warn("[IST] AudioContext.resume() failed:", e);
+      });
+    }
+    if (vadSourceNode) {
+      try { vadSourceNode.disconnect(); } catch (e) {
+        console.warn("[IST] vadSourceNode.disconnect() failed:", e);
+      }
+    }
+    vadSourceNode = audioContext.createMediaStreamSource(mediaStream);
+    analyser      = audioContext.createAnalyser();
+    analyser.fftSize = 512;
+    vadSourceNode.connect(analyser);
+    vadTimeDomainBuf = new Uint8Array(analyser.fftSize);   // allocate once, reuse
+    console.log("[IST] AudioContext ready, state:", audioContext.state);
+  } catch (e) {
+    console.warn("[IST] AudioContext setup failed — VAD disabled:", e);
+    analyser = null;
+  }
+}
+
+function getAudioRMS() {
+  if (!analyser || !vadTimeDomainBuf) return 0;
+  analyser.getByteTimeDomainData(vadTimeDomainBuf);
+  let sum = 0;
+  for (let i = 0; i < vadTimeDomainBuf.length; i++) {
+    const v = (vadTimeDomainBuf[i] - 128) / 128;
+    sum += v * v;
+  }
+  return Math.sqrt(sum / vadTimeDomainBuf.length);
+}
+
+function startVAD() {
+  stopVAD();
+  voiceDetected = false;
+  silenceStart  = null;
+
+  if (!analyser) return;  // VAD not available — rely on auto-stop timer only
+
+  vadInterval = setInterval(() => {
+    if (!isRecording || !mediaRecorder || mediaRecorder.state !== "recording") {
+      stopVAD();
+      return;
+    }
+
+    const rms     = getAudioRMS();
+    const elapsed = Date.now() - recordingStartTime;
+
+    if (rms >= VAD_THRESHOLD) {
+      // Voice detected — reset silence counter
+      voiceDetected = true;
+      silenceStart  = null;
+    } else if (voiceDetected) {
+      // Silence after voice — start / extend silence timer
+      if (silenceStart === null) {
+        silenceStart = Date.now();
+      } else if ((Date.now() - silenceStart) >= VAD_SILENCE_MS && elapsed >= VAD_MIN_RECORD_MS) {
+        console.log("[IST] VAD: silence detected → stopping recording");
+        stopVAD();
+        clearAutoStop();
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+          mediaRecorder.stop();
+        }
+      }
+    }
+  }, VAD_POLL_MS);
+}
+
+function stopVAD() {
+  if (vadInterval) {
+    clearInterval(vadInterval);
+    vadInterval = null;
+  }
+}
+
 function startListening() {
   if (!callActive) return;
   if (isRecording)  return;
+
+  stopVAD();   // clear any stale VAD from the previous turn
 
   // Create a fresh MediaRecorder for each turn (most reliable on iOS)
   try {
@@ -217,6 +336,7 @@ function startListening() {
   // FIX: attach onstop BEFORE start() so it's ready when stop fires
   mediaRecorder.onstop = async () => {
     isRecording = false;
+    stopVAD();
     clearAutoStop();
 
     if (!callActive) return;   // call was ended during recording
@@ -247,6 +367,7 @@ function startListening() {
   mediaRecorder.onerror = (e) => {
     console.error("[IST] MediaRecorder error:", e.error || e);
     isRecording = false;
+    stopVAD();
     clearAutoStop();
     if (callActive) {
       updateStatus("Listening... 🎤");
@@ -255,6 +376,8 @@ function startListening() {
   };
 
   mediaRecorder.start();   // collect all audio into one chunk on stop
+  recordingStartTime = Date.now();
+  startVAD();
   console.log("[IST] Recording started, state:", mediaRecorder.state);
 
   // Auto-stop after 15 seconds
