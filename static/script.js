@@ -382,7 +382,7 @@ function startListening() {
     }
   };
 
-  mediaRecorder.start(250);   // small chunks help Safari flush audio data more reliably
+  mediaRecorder.start(250);   // small chunks improve recorder data flushing, especially on iOS Safari
   console.log("[IST] Recording started, state:", mediaRecorder.state);
 
   // VAD: once user speech has started, stop recording after 1s silence
@@ -545,7 +545,6 @@ function playAudio(audioUrl) {
         minFloor: 0.016,
         thresholdMultiplier: 3.4,
         speechFramesNeeded: 4,
-        silenceMsToTrigger: 10_000, // not used for speaking interruption
         onSpeech: () => {
           if (!callActive || !currentPlaybackAudio) return;
           console.log("[IST] User interruption detected; stopping TTS");
