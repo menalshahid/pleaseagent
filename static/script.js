@@ -26,6 +26,7 @@ let autoStopTimer = null;   // FIX: track timer so we can clear it
 let currentPlaybackAudio = null;
 let recordingVadStopper = null;
 let speakingInterruptStopper = null;
+let callId = null;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Platform detection
@@ -94,6 +95,14 @@ document.addEventListener("DOMContentLoaded", () => {
   emptyState     = document.getElementById("emptyState");
 
   selectedMimeType = getSupportedMimeType();
+  try {
+    callId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : null;
+  } catch (_) {
+    callId = null;
+  }
+  if (!callId) {
+    callId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  }
   console.log("[IST] Script loaded | iOS:", isIOS(), "| MIME:", selectedMimeType);
 });
 
@@ -209,6 +218,9 @@ async function startCall() {
   unlockAudio();
 
   try {
+    if (!callId) {
+      callId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    }
     startBtn.disabled = true;
     updateStatus("Initializing...");
 
@@ -229,7 +241,7 @@ async function startCall() {
     // Fetch and play greeting
     updateStatus("Loading greeting...");
     try {
-      const greetingResp = await fetch("/api/greeting");
+      const greetingResp = await fetch(`/api/greeting?call_id=${encodeURIComponent(callId)}`);
       const greetingData = await greetingResp.json();
       // Always show greeting text so the user knows what to say
       if (greetingData.text) {
@@ -281,8 +293,13 @@ async function endCall() {
 
   updateStatus("Ending call...");
   try {
-    await fetch("/api/call/end", { method: "POST" });
+    await fetch("/api/call/end", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ call_id: callId }),
+    });
   } catch (_) {}
+  callId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
   startBtn.style.display = "inline-flex";
   endBtn.style.display   = "none";
@@ -434,6 +451,7 @@ async function sendAudioToServer(audioBlob, mimeUsed) {
     const filename = `audio.${ext}`;
     const formData = new FormData();
     formData.append("audio", audioBlob, filename);
+    formData.append("call_id", callId);
 
     console.log("[IST] Sending audio:", filename, audioBlob.size, "bytes");
 
