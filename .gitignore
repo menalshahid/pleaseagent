@@ -6,3 +6,4 @@ __pycache__/
 *.pyc
 temp_*
 backup_kb/
+static/audio_*.mp3

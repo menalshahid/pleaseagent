@@ -26,6 +26,7 @@ let autoStopTimer = null;   // FIX: track timer so we can clear it
 let currentPlaybackAudio = null;
 let recordingVadStopper = null;
 let speakingInterruptStopper = null;
+let callId = null;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Platform detection
@@ -42,6 +43,23 @@ function isAndroid() {
 
 function isMobile() {
   return isIOS() || isAndroid();
+}
+
+function newCallId() {
+  try {
+    if (crypto && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    if (crypto && crypto.getRandomValues) {
+      const b = new Uint8Array(16);
+      crypto.getRandomValues(b);
+      b[6] = (b[6] & 0x0f) | 0x40;
+      b[8] = (b[8] & 0x3f) | 0x80;
+      const hex = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+    }
+  } catch (_) {}
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -94,6 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
   emptyState     = document.getElementById("emptyState");
 
   selectedMimeType = getSupportedMimeType();
+  callId = newCallId();
   console.log("[IST] Script loaded | iOS:", isIOS(), "| MIME:", selectedMimeType);
 });
 
@@ -209,6 +228,7 @@ async function startCall() {
   unlockAudio();
 
   try {
+    if (!callId) callId = newCallId();
     startBtn.disabled = true;
     updateStatus("Initializing...");
 
@@ -229,7 +249,7 @@ async function startCall() {
     // Fetch and play greeting
     updateStatus("Loading greeting...");
     try {
-      const greetingResp = await fetch("/api/greeting");
+      const greetingResp = await fetch(`/api/greeting?call_id=${encodeURIComponent(callId)}`);
       const greetingData = await greetingResp.json();
       // Always show greeting text so the user knows what to say
       if (greetingData.text) {
@@ -281,8 +301,13 @@ async function endCall() {
 
   updateStatus("Ending call...");
   try {
-    await fetch("/api/call/end", { method: "POST" });
+    await fetch("/api/call/end", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ call_id: callId }),
+    });
   } catch (_) {}
+  callId = newCallId();
 
   startBtn.style.display = "inline-flex";
   endBtn.style.display   = "none";
@@ -434,6 +459,7 @@ async function sendAudioToServer(audioBlob, mimeUsed) {
     const filename = `audio.${ext}`;
     const formData = new FormData();
     formData.append("audio", audioBlob, filename);
+    formData.append("call_id", callId);
 
     console.log("[IST] Sending audio:", filename, audioBlob.size, "bytes");
 
