@@ -45,6 +45,23 @@ function isMobile() {
   return isIOS() || isAndroid();
 }
 
+function newCallId() {
+  try {
+    if (crypto && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    if (crypto && crypto.getRandomValues) {
+      const b = new Uint8Array(16);
+      crypto.getRandomValues(b);
+      b[6] = (b[6] & 0x0f) | 0x40;
+      b[8] = (b[8] & 0x3f) | 0x80;
+      const hex = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+    }
+  } catch (_) {}
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MIME type selection — iOS only supports mp4/aac, NOT webm
 // ─────────────────────────────────────────────────────────────────────────────
@@ -95,14 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
   emptyState     = document.getElementById("emptyState");
 
   selectedMimeType = getSupportedMimeType();
-  try {
-    callId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : null;
-  } catch (_) {
-    callId = null;
-  }
-  if (!callId) {
-    callId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  }
+  callId = newCallId();
   console.log("[IST] Script loaded | iOS:", isIOS(), "| MIME:", selectedMimeType);
 });
 
@@ -218,9 +228,7 @@ async function startCall() {
   unlockAudio();
 
   try {
-    if (!callId) {
-      callId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    }
+    if (!callId) callId = newCallId();
     startBtn.disabled = true;
     updateStatus("Initializing...");
 
@@ -299,7 +307,7 @@ async function endCall() {
       body: JSON.stringify({ call_id: callId }),
     });
   } catch (_) {}
-  callId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  callId = newCallId();
 
   startBtn.style.display = "inline-flex";
   endBtn.style.display   = "none";

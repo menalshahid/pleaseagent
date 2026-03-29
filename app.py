@@ -147,7 +147,6 @@ def greeting():
     display the text even when audio playback is unavailable.
     """
     global _greeting_audio, _greeting_audio_tried
-    _get_call_state(_get_call_id(request))
     if not _greeting_audio_tried:
         _greeting_audio_tried = True
         _greeting_audio = generate_tts(_GREETING_TEXT, language="en")
@@ -179,9 +178,13 @@ def call_process():
     """
     # ── Transcription ─────────────────────────────────────────────────────────
     transcript = ""
-    body = {}
+    body = request.get_json(silent=True) or {} if request.is_json else {}
+    call_id = _get_call_id(request, body)
+    call_state = _get_call_state(call_id)
+    call_history = call_state["history"]
+    call_language = call_state["language"]
+
     if request.is_json:
-        body = request.get_json(silent=True) or {}
         transcript = (body.get("text") or "").strip()
         if not transcript:
             return jsonify({"error": "No text"}), 400
@@ -193,10 +196,6 @@ def call_process():
             return jsonify({"error": "Empty audio"}), 400
 
         # English → forced en. Urdu → forced ur (fast turbo). First turn → auto-detect.
-        call_id = _get_call_id(request)
-        call_state = _get_call_state(call_id)
-        call_language = call_state["language"]
-
         if call_language == "en":
             stt_lang = "en"
         elif call_language == "ur":
@@ -205,31 +204,33 @@ def call_process():
             stt_lang = None
         transcript = transcribe_audio(audio_file, language=stt_lang)
 
-    call_id = _get_call_id(request, body)
-    call_state = _get_call_state(call_id)
-    call_history = call_state["history"]
-    call_language = call_state["language"]
-
     if not transcript or "sorry" in transcript.lower():
         return jsonify({"transcript": transcript or "", "reply": "", "audio": "", "end_call": False})
 
+    # On language-selection turn, allow short tokens like "Urdu"/"English" before noise guard.
+    if call_language is None:
+        prechosen = _detect_language(transcript)
+    else:
+        prechosen = None
+
     if _looks_like_noise_or_hallucinated_stt(transcript):
-        reprompt = (
-            "معذرت، آواز واضح نہیں آئی۔ براہ کرم سوال دوبارہ واضح طور پر پوچھیں۔"
-            if call_language == "ur"
-            else "Sorry, I could not hear a clear question. Please ask again."
-        )
-        audio_url = _speak(reprompt, call_language or "en")
-        return jsonify({
-            "transcript": transcript,
-            "reply": reprompt,
-            "audio": audio_url or "",
-            "end_call": False,
-        })
+        if prechosen not in {"ur", "en"}:
+            reprompt = (
+                "معذرت، آواز واضح نہیں آئی۔ براہ کرم سوال دوبارہ واضح طور پر پوچھیں۔"
+                if call_language == "ur"
+                else "Sorry, I could not hear a clear question. Please ask again."
+            )
+            audio_url = _speak(reprompt, call_language or "en")
+            return jsonify({
+                "transcript": transcript,
+                "reply": reprompt,
+                "audio": audio_url or "",
+                "end_call": False,
+            })
 
     # ── Language selection turn ───────────────────────────────────────────────
     if call_language is None:
-        chosen = _detect_language(transcript)
+        chosen = prechosen or _detect_language(transcript)
 
         if chosen == "ur":
             call_state["language"] = "ur"
@@ -275,7 +276,7 @@ def call_process():
         call_history.append({"role": "user",      "content": transcript})
         call_history.append({"role": "assistant",  "content": response})
         if len(call_history) > _MAX_HISTORY_TURNS * 2:
-            call_state["history"] = call_history[-(_MAX_HISTORY_TURNS * 2):]
+            call_history[:] = call_history[-(_MAX_HISTORY_TURNS * 2):]
         audio_url = _speak(response, lang)
     else:
         audio_url = None
