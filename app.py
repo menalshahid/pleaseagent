@@ -36,8 +36,9 @@ _URDU_SIGNALS    = ["urdu", "اردو", "urdoo", "urdo", "اردو میں", "urd
 _ENGLISH_SIGNALS = ["english", "انگریزی", "eng ", "inglish", "inglis", "in english",
                     "english mein", "english me"]
 
-# Treat underscores as non-meaningful symbols here (same as punctuation/noise).
-_PUNCT_OR_SYMBOL_ONLY_RE = re.compile(r"^[^A-Za-z0-9]+$", re.UNICODE)
+# Treat underscores as non-meaningful symbols here (same as punctuation/noise),
+# while preserving all Unicode letters (including Urdu) as meaningful content.
+_PUNCT_OR_SYMBOL_ONLY_RE = re.compile(r"^[\W_]+$", re.UNICODE)
 _MAX_ACCIDENTAL_CAPTURE_LENGTH = 4
 _NON_QUESTION_STT_SNIPPETS = (
     "you",
