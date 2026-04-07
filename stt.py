@@ -21,17 +21,9 @@ def transcribe_audio(audio_file, language: str | None = None) -> str:
     """Transcribe audio from browser MediaRecorder (webm/m4a/ogg/wav/mp4).
     language: 'en', 'ur', or None (auto-detect)
     """
-    api_key = (
-        os.getenv("GROQ_API_KEY")
-        or (os.getenv("GROQ_API_KEYS") or "").split(",")[0].strip()
-    )
-    if not api_key:
-        logger.warning("GROQ_API_KEY not set; STT will fail.")
-        return "Sorry, speech recognition is not configured."
-
+    from groq_utils import get_client
     try:
-        from groq import Groq
-        client = Groq(api_key=api_key)
+        client = get_client()
 
         data = audio_file.read()
         if not data or len(data) < 100:
