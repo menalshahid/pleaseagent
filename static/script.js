@@ -16,13 +16,20 @@ let startBtn = null;
 let endBtn = null;
 let transcriptList = null;
 let emptyState = null;
+<<<<<<< HEAD
 let autoStopTimer = null;
+=======
+let autoStopTimer = null;   // FIX: track timer so we can clear it
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
 let currentPlaybackAudio = null;
 let recordingVadStopper = null;
 let speakingInterruptStopper = null;
 let callId = null;
+<<<<<<< HEAD
 let retryCount = 0;
 const MAX_RETRIES = 3;
+=======
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Platform detection
@@ -41,6 +48,7 @@ function isMobile() {
   return isIOS() || isAndroid();
 }
 
+<<<<<<< HEAD
 function getPlatform() {
   if (isIOS()) return "ios";
   if (isAndroid()) return "android";
@@ -50,12 +58,23 @@ function getPlatform() {
 function newCallId() {
   try {
     if (crypto && crypto.randomUUID) return crypto.randomUUID();
+=======
+function newCallId() {
+  try {
+    if (crypto && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
     if (crypto && crypto.getRandomValues) {
       const b = new Uint8Array(16);
       crypto.getRandomValues(b);
       b[6] = (b[6] & 0x0f) | 0x40;
       b[8] = (b[8] & 0x3f) | 0x80;
+<<<<<<< HEAD
       const hex = Array.from(b, x => x.toString(16).padStart(2, "0")).join("");
+=======
+      const hex = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
       return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
     }
   } catch (_) {}
@@ -129,11 +148,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
   selectedMimeType = getSupportedMimeType();
   callId = newCallId();
+<<<<<<< HEAD
   console.log(`[IST] Init | Platform: ${getPlatform()} | MIME: ${selectedMimeType}`);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // iOS audio unlock
+=======
+  console.log("[IST] Script loaded | iOS:", isIOS(), "| MIME:", selectedMimeType);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// iOS audio unlock helper
+// On iOS Safari the audio autoplay policy is tied to a synchronous user-gesture
+// chain.  Any `await` (network I/O) BEFORE audio.play() severs that chain and
+// causes play() to fail silently.  Calling unlockAudio() synchronously at the
+// START of the click handler (before the first await) keeps the audio session
+// alive for all subsequent plays in this call.
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
 // ─────────────────────────────────────────────────────────────────────────────
 
 function unlockAudio() {
@@ -148,7 +180,11 @@ function unlockAudio() {
     src.start(0);
     ctx.resume().catch(() => {});
   } catch (e) {
+<<<<<<< HEAD
     console.warn("[IST] Audio unlock failed (non-fatal):", e.message);
+=======
+    // Non-fatal — ignore if AudioContext not supported
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
   }
 }
 
@@ -164,6 +200,7 @@ function stopPlayback() {
   }
 }
 
+<<<<<<< HEAD
 // ─────────────────────────────────────────────────────────────────────────────
 // VAD with platform-specific tuning
 // ─────────────────────────────────────────────────────────────────────────────
@@ -204,6 +241,8 @@ function getVADParams() {
   return base;
 }
 
+=======
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
 function startLevelMonitor({
   sourceStream,
   sampleMs = 100,
@@ -218,6 +257,7 @@ function startLevelMonitor({
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
   if (!AudioCtx || !sourceStream) return () => {};
 
+<<<<<<< HEAD
   try {
     const ctx = new AudioCtx();
     const analyser = ctx.createAnalyser();
@@ -278,16 +318,77 @@ function startLevelMonitor({
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Call control - HARDENED
+=======
+  const ctx = new AudioCtx();
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 1024;
+  analyser.smoothingTimeConstant = 0.2;
+  const micSource = ctx.createMediaStreamSource(sourceStream);
+  micSource.connect(analyser);
+
+  const data = new Float32Array(analyser.fftSize);
+  const baselineLevels = [];
+  const startAt = Date.now();
+  let lastSpeechAt = Date.now();
+  let speechFrames = 0;
+  let stopped = false;
+
+  const interval = setInterval(() => {
+    if (stopped) return;
+    analyser.getFloatTimeDomainData(data);
+    let sum = 0;
+    for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+    const rms = Math.sqrt(sum / data.length);
+
+    if (Date.now() - startAt < baselineMs) {
+      baselineLevels.push(rms);
+    }
+    const baseline = baselineLevels.length
+      ? baselineLevels.reduce((a, b) => a + b, 0) / baselineLevels.length
+      : 0;
+    const threshold = Math.max(minFloor, baseline * thresholdMultiplier);
+
+    if (rms > threshold) {
+      speechFrames += 1;
+      lastSpeechAt = Date.now();
+      if (speechFrames >= speechFramesNeeded && onSpeech) onSpeech();
+    } else {
+      speechFrames = 0;
+      if ((Date.now() - lastSpeechAt) >= silenceMsToTrigger && onSilence) onSilence();
+    }
+  }, sampleMs);
+
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    clearInterval(interval);
+    try { micSource.disconnect(); } catch (_) {}
+    try { analyser.disconnect(); } catch (_) {}
+    try { ctx.close(); } catch (_) {}
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Call control
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function startCall() {
   if (callActive) return;
 
+<<<<<<< HEAD
+=======
+  // MUST unlock audio BEFORE any await — iOS Safari loses the user-gesture
+  // audio context as soon as the first asynchronous hop (network request) occurs.
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
   unlockAudio();
 
   try {
     if (!callId) callId = newCallId();
+<<<<<<< HEAD
     retryCount = 0;
+=======
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
     startBtn.disabled = true;
     updateStatus("Initializing...");
 
@@ -308,6 +409,7 @@ async function startCall() {
     // Fetch greeting (non-blocking - show text immediately)
     updateStatus("Loading greeting...");
     try {
+<<<<<<< HEAD
       const greetingResp = await Promise.race([
         fetch(`/api/greeting?call_id=${encodeURIComponent(callId)}`),
         new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
@@ -322,7 +424,18 @@ async function startCall() {
       if (greetingData.audio) {
         updateStatus("Speaking... 🔊");
         playAudio(greetingData.audio).catch(() => console.warn("[IST] Greeting play failed (non-blocking)"));
+=======
+      const greetingResp = await fetch(`/api/greeting?call_id=${encodeURIComponent(callId)}`);
+      const greetingData = await greetingResp.json();
+      // Always show greeting text so the user knows what to say
+      if (greetingData.text) {
+        addTranscript(greetingData.text, "agent");
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
       }
+    if (greetingData.audio) {
+      updateStatus("Speaking... 🔊");
+      await playAudio(greetingData.audio);
+    }
     } catch (e) {
       console.warn("[IST] Greeting error (non-fatal):", e.message);
       updateStatus("Listening... 🎤");
@@ -350,7 +463,10 @@ async function endCall() {
   callActive = false;
   clearAutoStop();
   stopPlayback();
+<<<<<<< HEAD
   
+=======
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
   if (recordingVadStopper) {
     recordingVadStopper();
     recordingVadStopper = null;
@@ -373,6 +489,7 @@ async function endCall() {
   updateStatus("Ending call...");
   
   try {
+<<<<<<< HEAD
     await Promise.race([
       fetch("/api/call/end", {
         method: "POST",
@@ -381,7 +498,15 @@ async function endCall() {
       }),
       new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
     ]);
+=======
+    await fetch("/api/call/end", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ call_id: callId }),
+    });
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
   } catch (_) {}
+  callId = newCallId();
 
   callId = newCallId();
   startBtn.style.display = "inline-flex";
@@ -420,8 +545,12 @@ function startListening() {
   }
 
   audioChunks = [];
+<<<<<<< HEAD
   isRecording = true;
 
+=======
+  isRecording  = true;
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
   if (recordingVadStopper) {
     recordingVadStopper();
     recordingVadStopper = null;
@@ -437,7 +566,10 @@ function startListening() {
   mediaRecorder.onstop = async () => {
     isRecording = false;
     clearAutoStop();
+<<<<<<< HEAD
     
+=======
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
     if (recordingVadStopper) {
       recordingVadStopper();
       recordingVadStopper = null;
@@ -487,6 +619,7 @@ function startListening() {
     }
   };
 
+<<<<<<< HEAD
   try {
     mediaRecorder.start(250);
   } catch (e) {
@@ -512,11 +645,36 @@ function startListening() {
       if (isRecording && mediaRecorder && mediaRecorder.state === "recording") {
         console.log("[IST] VAD silence detected, stopping");
         try { mediaRecorder.stop(); } catch (_) {}
+=======
+  mediaRecorder.start(250);   // small chunks improve recorder data flushing, especially on iOS Safari
+  console.log("[IST] Recording started, state:", mediaRecorder.state);
+
+  // VAD: once user speech has started, stop recording after 1s silence
+  let speechDetected = false;
+  recordingVadStopper = startLevelMonitor({
+    sourceStream: stream,
+    sampleMs: 100,
+    baselineMs: 500,
+    minFloor: 0.014,
+    thresholdMultiplier: 3.0,
+    speechFramesNeeded: 3,
+    silenceMsToTrigger: 1000,
+    onSpeech: () => { speechDetected = true; },
+    onSilence: () => {
+      if (!speechDetected) return; // ignore pure background/noise before real speech
+      if (isRecording && mediaRecorder && mediaRecorder.state === "recording") {
+        console.log("[IST] VAD silence detected >1s, stopping recording");
+        mediaRecorder.stop();
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
       }
     },
   });
 
+<<<<<<< HEAD
   // Auto-stop at 15 seconds
+=======
+  // Auto-stop after 15 seconds
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
   clearAutoStop();
   autoStopTimer = setTimeout(() => {
     if (isRecording && mediaRecorder && mediaRecorder.state === "recording") {
@@ -540,8 +698,17 @@ function getExtensionForMime(mime) {
 }
 
 async function sendAudioToServer(audioBlob, mimeUsed) {
+<<<<<<< HEAD
   const maxRetries = 3;
   let lastError = null;
+=======
+  try {
+    const ext      = getExtensionForMime(mimeUsed);
+    const filename = `audio.${ext}`;
+    const formData = new FormData();
+    formData.append("audio", audioBlob, filename);
+    formData.append("call_id", callId);
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -635,8 +802,17 @@ function playAudio(audioUrl) {
     const audio = new Audio();
     currentPlaybackAudio = audio;
 
+<<<<<<< HEAD
     audio.volume = 1.0;
     audio.preload = "auto";
+=======
+    // FIX: do NOT set crossOrigin on iOS — it triggers CORS preflight that
+    // fails for same-origin /static/ files on Safari, breaking playback.
+    // audio.crossOrigin = "anonymous";  ← REMOVED
+
+    audio.volume   = 1.0;
+    audio.preload  = "auto";
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
     audio.setAttribute("playsinline", "true");
     audio.setAttribute("webkit-playsinline", "true");
 
@@ -663,14 +839,22 @@ function playAudio(audioUrl) {
       done();
     }, 60000);
 
+<<<<<<< HEAD
     audio.onended = () => { console.log("[IST] Audio ended"); done(); };
     audio.onerror = (e) => { console.error("[IST] Audio error:", e); done(); };
     audio.onpause = () => {
+=======
+    audio.onended  = () => { console.log("[IST] Audio ended"); done(); };
+    audio.onerror  = (e) => { console.error("[IST] Audio error:", e); done(); };
+    audio.onpause  = () => {
+      // If paused by barge-in/end-call, continue conversation loop safely.
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
       if (!audio.ended) done();
     };
 
     audio.src = audioUrl;
 
+<<<<<<< HEAD
     // Barge-in detection (user interruption)
     if (callActive && stream) {
       const bargeInParams = getVADParams();
@@ -684,6 +868,21 @@ function playAudio(audioUrl) {
         onSpeech: () => {
           if (!callActive || !currentPlaybackAudio) return;
           console.log("[IST] Barge-in detected");
+=======
+    // During speaking, allow user interruption (barge-in) but require
+    // sustained speech to avoid triggering on brief background noise.
+    if (callActive && stream) {
+      speakingInterruptStopper = startLevelMonitor({
+        sourceStream: stream,
+        sampleMs: 100,
+        baselineMs: 500,
+        minFloor: 0.016,
+        thresholdMultiplier: 3.4,
+        speechFramesNeeded: 4,
+        onSpeech: () => {
+          if (!callActive || !currentPlaybackAudio) return;
+          console.log("[IST] User interruption detected; stopping TTS");
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
           stopPlayback();
           if (!isRecording) {
             updateStatus("Listening... 🎤");
@@ -693,12 +892,23 @@ function playAudio(audioUrl) {
       });
     }
 
+<<<<<<< HEAD
     // Play with error handling
     const p = audio.play();
     if (p && typeof p.then === "function") {
       p.then(() => console.log("[IST] Playback started"))
         .catch((err) => {
           console.error("[IST] Play failed:", err.message);
+=======
+    // iOS requires play() to be called directly from a user-gesture chain.
+    // We're already inside a user-initiated flow so this should work.
+    const p = audio.play();
+    if (p && typeof p.then === "function") {
+      p.then(() => console.log("[IST] Playback started"))
+       .catch((err) => {
+          console.error("[IST] play() rejected:", err);
+          // Still resolve so the loop continues
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
           done();
         });
     }
@@ -761,12 +971,17 @@ function sleep(ms) {
 
 window.addEventListener("beforeunload", () => {
   stopPlayback();
+<<<<<<< HEAD
   if (stream) stream.getTracks().forEach(t => {
     try { t.stop(); } catch (_) {}
   });
   if (isRecording && mediaRecorder) {
     try { mediaRecorder.stop(); } catch (_) {}
   }
+=======
+  if (stream)       stream.getTracks().forEach(t => t.stop());
+  if (isRecording && mediaRecorder) mediaRecorder.stop();
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
 });
 
 document.addEventListener("visibilitychange", () => {

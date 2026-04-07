@@ -161,6 +161,7 @@ def _cached_greeting_tts(text_hash: str, language: str) -> str | None:
     # In real use, pass hash of text, not full text
     pass
 
+<<<<<<< HEAD
 # Prefetch greeting on startup
 _greeting_cache = {}
 
@@ -183,3 +184,94 @@ def prefetch_greeting(text: str, language: str = "en") -> None:
 def get_cached_greeting(language: str = "en") -> str | None:
     """Get prefetched greeting URL or None."""
     return _greeting_cache.get(language)
+=======
+# FALLBACK: If asyncio context is problematic, use synchronous wrapper
+def _get_sync_save():
+    """Create a synchronous save function for edge-tts.
+    Runs edge-tts in a background thread with its own event loop so it is
+    compatible with gunicorn + gevent.  Exceptions are propagated back to the
+    caller so that generate_tts_v2 can detect failures reliably.
+    """
+    import threading
+
+    def sync_save(communicate, filename):
+        result: dict = {"error": None, "done": False}
+
+        def _run():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(communicate.save(filename))
+                result["done"] = True
+            except Exception as exc:  # broad catch: edge-tts can raise aiohttp, SSL, OSError, etc.
+                result["error"] = exc
+            finally:
+                loop.close()
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+        thread.join(timeout=15)  # Wait max 15 seconds
+
+        if thread.is_alive():
+            raise TimeoutError("TTS generation timed out after 15 s")
+        if result["error"] is not None:
+            raise result["error"]
+        # Defensive: guard against abnormal thread exit (e.g., OS signal) that
+        # neither raised an exception nor reached the success path.
+        if not result["done"]:
+            raise RuntimeError("TTS thread finished without saving the file")
+
+    return sync_save
+
+# Synchronous save helper used by generate_tts_v2
+_sync_save = _get_sync_save()
+
+def generate_tts_v2(text: str, language: str = "en") -> str | None:
+    """
+    Alternative TTS implementation using threading for Flask compatibility.
+    """
+    if not text or not str(text).strip():
+        return None
+    
+    try:
+        os.makedirs(AUDIO_DIR, exist_ok=True)
+        filename = f"{AUDIO_DIR}/audio_{uuid.uuid4().hex}.mp3"
+        voice = _VOICES.get(language, _VOICES["en"])
+        
+        # Clean text
+        if language == "ur":
+            clean_text = _clean_urdu_safe(text)
+        else:
+            clean_text = _clean_english_safe(text)
+        
+        if not clean_text or len(clean_text.strip()) < 2:
+            clean_text = str(text).strip()
+        
+        if len(clean_text) > 1500:
+            clean_text = clean_text[:1497] + "..."
+        
+        logger.info(
+            "TTS [lang=%s, len=%d]: %s...",
+            language, len(clean_text),
+            clean_text[:60].replace('\n', ' ')
+        )
+        
+        # Use sync wrapper
+        communicate = edge_tts.Communicate(clean_text, voice)
+        _sync_save(communicate, filename)
+
+        # Verify the file was actually written before returning its URL
+        if not os.path.exists(filename) or os.path.getsize(filename) == 0:
+            logger.error("TTS file missing or empty after save: %s", filename)
+            return None
+        
+        return f"/{filename}".replace("//", "/")
+        
+    except Exception as e:
+        logger.exception("TTS error: %s", e)
+        return None
+
+# Override default function to use v2
+original_generate_tts = generate_tts
+generate_tts = generate_tts_v2
+>>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
