@@ -11,28 +11,19 @@ except ImportError:
 from flask import Flask, render_template, request, jsonify
 import rag
 from rag import answer_question
-from tts_production import generate_tts, prefetch_greeting, get_cached_greeting
+from tts import generate_tts
 from stt import transcribe_audio
 
 app = Flask(__name__)
 
 # ── Per-call state ────────────────────────────────────────────────────────────
-<<<<<<< HEAD
-=======
 # Keep per-device/session state isolated by call_id to avoid cross-device bleed.
->>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
 
 _MAX_HISTORY_TURNS = 10
 _DEFAULT_CALL_ID = "default"
 _calls: dict[str, dict] = {}
-<<<<<<< HEAD
-_greeting_text = (
-=======
-_greeting_audio = None
-_greeting_audio_tried = False  # True after first TTS attempt so we don't retry on every request
 
 _GREETING_TEXT = (
->>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
     "Hello! This is the IST admissions helpline. "
     "Please say English or Urdu to choose your language."
 )
@@ -43,18 +34,7 @@ _URDU_SIGNALS = ["urdu", "اردو", "urdoo", "urdo", "اردو میں", "urdu m
 _ENGLISH_SIGNALS = ["english", "انگریزی", "eng ", "inglish", "inglis", "in english",
                     "english mein", "english me"]
 
-<<<<<<< HEAD
-_PUNCT_OR_SYMBOL_ONLY_RE = re.compile(r"^[\W_]+$", re.UNICODE)
-_MAX_ACCIDENTAL_CAPTURE_LENGTH = 4
-_NON_QUESTION_STT_SNIPPETS = (
-    "you", "thank you", "thanks", "music", "background music",
-    "applause", "noise", "inaudible", "silence",
-)
-
-def _get_call_id(req, body: dict | None = None) -> str:
-    """Extract stable call identifier from request."""
-=======
-# Treat underscores as non-meaningful symbols here (same as punctuation/noise),
+# Treat underscores as non-meaningful symbols (same as punctuation/noise),
 # while preserving all Unicode letters (including Urdu) as meaningful content.
 _PUNCT_OR_SYMBOL_ONLY_RE = re.compile(r"^[\W_]+$", re.UNICODE)
 _MAX_ACCIDENTAL_CAPTURE_LENGTH = 4
@@ -74,7 +54,6 @@ _NON_QUESTION_STT_SNIPPETS = (
 
 def _get_call_id(req, body: dict | None = None) -> str:
     """Extract stable call identifier from request (query/json/form/header)."""
->>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
     cid = (
         req.args.get("call_id")
         or (body or {}).get("call_id")
@@ -85,10 +64,7 @@ def _get_call_id(req, body: dict | None = None) -> str:
     cid = str(cid).strip()
     if not cid:
         return _DEFAULT_CALL_ID
-<<<<<<< HEAD
-=======
     # Defensive length bound; keep ASCII/Unicode content as-is.
->>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
     return cid[:128]
 
 def _get_call_state(call_id: str) -> dict:
@@ -110,34 +86,16 @@ def _detect_language(text: str) -> str | None:
 def _speak(text: str, lang: str = "en") -> str | None:
     """Sanitize and generate TTS. Returns audio URL or None."""
     t = str(text).strip()
-    
+
     # Remove metadata markers only
     t = re.sub(r'\[TOPIC:[^\]]*\]\s*', '', t)
     t = re.sub(r'^(PAGE|TOPIC)\s*:\s*[^\n]*\n?', '', t, flags=re.MULTILINE)
-    
+
     # Safety: truncate if way too long
     if len(t) > 500:
         t = t[:500]
-    
+
     return generate_tts(t, language=lang)
-
-def _looks_like_noise_or_hallucinated_stt(text: str) -> bool:
-    """Guard against noisy STT captures."""
-    t = (text or "").strip()
-    if not t:
-        return True
-    if _PUNCT_OR_SYMBOL_ONLY_RE.match(t):
-        return True
-
-    t_lower = t.lower()
-    if t_lower in {"hmm", "hmmm", "umm", "uh", "uhh", "huh", "ok", "okay"}:
-        return True
-
-    if 1 <= len(t_lower) <= _MAX_ACCIDENTAL_CAPTURE_LENGTH and re.fullmatch(r"[a-z]+", t_lower):
-        return True
-
-    return any(snippet in t_lower for snippet in _NON_QUESTION_STT_SNIPPETS)
-
 
 def _looks_like_noise_or_hallucinated_stt(text: str) -> bool:
     """Best-effort guard to avoid answering non-questions from noisy captures.
@@ -174,84 +132,45 @@ def index():
 
 @app.route("/api/greeting")
 def greeting():
-<<<<<<< HEAD
-    """Return greeting with text + audio (text shown even if audio fails)."""
-    language = request.args.get("language", "en")  # Allow language override
-    
-    # Try cached audio first (fast)
-    audio = get_cached_greeting(language)
-    
-    # Generate if not cached
-    if not audio:
-        audio = _speak(_greeting_text, language)
-    
-    return jsonify({
-        "audio": audio or "",
-        "text": _greeting_text
-    })
+    """Return greeting TTS that asks for language selection.
+    Played once per call; asks user to say English or Urdu.
+    Returns both the audio URL and the greeting text so the frontend can
+    display the text even when audio playback is unavailable.
+    """
+    audio = generate_tts(_GREETING_TEXT, language="en")
+    return jsonify({"audio": audio or "", "text": _GREETING_TEXT})
+
 
 @app.route("/api/call/end", methods=["POST"])
 def call_end():
-    """End call and cleanup."""
+    """Reset per-call state and clean up old TTS audio files."""
     import glob
     call_id = _get_call_id(request, request.get_json(silent=True) or {})
     _calls.pop(call_id, None)
-    
-    # Cleanup old audio files (optional)
+
+    # Cleanup old audio files
     try:
         import time
         now = time.time()
         for path in glob.glob("static/audio_*.mp3"):
-            if now - os.path.getmtime(path) > 3600:  # Older than 1 hour
+            if now - os.path.getmtime(path) > 3600:  # older than 1 hour
                 try:
                     os.remove(path)
                 except OSError:
                     pass
     except Exception:
         pass
-    
-=======
-    """Return greeting TTS that asks for language selection.
-    Played once per call; asks user to say English or Urdu.
-    Returns both the audio URL and the greeting text so the frontend can
-    display the text even when audio playback is unavailable.
-    """
-    global _greeting_audio, _greeting_audio_tried
-    if not _greeting_audio_tried:
-        _greeting_audio_tried = True
-        _greeting_audio = generate_tts(_GREETING_TEXT, language="en")
-    return jsonify({"audio": _greeting_audio or "", "text": _GREETING_TEXT})
 
-
-@app.route("/api/call/end", methods=["POST"])
-def call_end():
-    """Reset all per-call state and delete TTS audio files."""
-    import glob, os
-    global _greeting_audio, _greeting_audio_tried
-    call_id = _get_call_id(request, request.get_json(silent=True) or {})
-    _greeting_audio = None
-    _greeting_audio_tried = False
-    _calls.pop(call_id, None)
-    for path in glob.glob("static/audio_*.mp3"):
-        try:
-            os.remove(path)
-        except OSError:
-            pass
->>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
     return jsonify({"ok": True})
 
-@app.route("/api/call/process", methods=["POST"])
-def call_process():
-<<<<<<< HEAD
-    """Process audio: STT → language detection → RAG answer → TTS."""
-    
-=======
+
+@app.route("/api/call/audio", methods=["POST"])
+def call_audio():
     """Audio in → transcript → reply → TTS out.
     First turn after greeting: language selection.
     Subsequent turns: normal Q&A in the chosen language.
     """
     # ── Transcription ─────────────────────────────────────────────────────────
->>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
     transcript = ""
     body = request.get_json(silent=True) or {} if request.is_json else {}
     call_id = _get_call_id(request, body)
@@ -259,11 +178,6 @@ def call_process():
     call_history = call_state["history"]
     call_language = call_state["language"]
 
-<<<<<<< HEAD
-    # ── Get transcript ────────────────────────────────────────────────────────
-    
-=======
->>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
     if request.is_json:
         transcript = (body.get("text") or "").strip()
         if not transcript:
@@ -271,23 +185,19 @@ def call_process():
     else:
         if "audio" not in request.files:
             return jsonify({"error": "No audio"}), 400
-        
+
         audio_file = request.files["audio"]
         if audio_file.filename == "":
             return jsonify({"error": "Empty audio"}), 400
 
-<<<<<<< HEAD
-        # Choose STT language
-=======
         # English → forced en. Urdu → forced ur (fast turbo). First turn → auto-detect.
->>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
         if call_language == "en":
             stt_lang = "en"
         elif call_language == "ur":
             stt_lang = "ur"
         else:
             stt_lang = None  # auto-detect
-        
+
         transcript = transcribe_audio(audio_file, language=stt_lang)
 
     # Graceful handling of empty/failed STT
@@ -299,28 +209,7 @@ def call_process():
             "end_call": False
         })
 
-    # ── Check if it's just noise ──────────────────────────────────────────────
-    
-    prechosen = None
-    if call_language is None:
-        prechosen = _detect_language(transcript)
-    
-    if _looks_like_noise_or_hallucinated_stt(transcript):
-        # Only reject if NOT a language choice
-        if prechosen not in {"ur", "en"}:
-            reprompt = (
-                "معاف کیجیے، آواز واضح نہیں آئی۔ براہ کرم سوال واضح طور پر پوچھیں۔"
-                if call_language == "ur"
-                else "Sorry, I didn't catch that. Please speak clearly."
-            )
-            audio_url = _speak(reprompt, call_language or "en")
-            return jsonify({
-                "transcript": transcript,
-                "reply": reprompt,
-                "audio": audio_url or "",
-                "end_call": False,
-            })
-
+    # ── Noise guard ───────────────────────────────────────────────────────────
     # On language-selection turn, allow short tokens like "Urdu"/"English" before noise guard.
     if call_language is None:
         prechosen = _detect_language(transcript)
@@ -343,20 +232,12 @@ def call_process():
             })
 
     # ── Language selection turn ───────────────────────────────────────────────
-<<<<<<< HEAD
-    
-=======
->>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
     if call_language is None:
         chosen = prechosen or _detect_language(transcript)
 
         if chosen == "ur":
             call_state["language"] = "ur"
-<<<<<<< HEAD
-            reply = "بہت اچھا! میں اب اردو میں آپ کی مدد کروں گی۔ براہ کرم اپنا سوال پوچھیں۔"
-=======
-            reply     = "بہت اچھا! میں اب اردو میں آپ کی مدد کروں گی۔ آپ کا سوال کیا ہے؟"
->>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
+            reply = "بہت اچھا! میں اب اردو میں آپ کی مدد کروں گی۔ آپ کا سوال کیا ہے؟"
             audio_url = _speak(reply, "ur")
             return jsonify({
                 "transcript": transcript,
@@ -367,11 +248,7 @@ def call_process():
 
         if chosen == "en":
             call_state["language"] = "en"
-<<<<<<< HEAD
-            reply = "Great! I will help you in English. What is your question?"
-=======
-            reply     = "Great! I will assist you in English. What is your query?"
->>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
+            reply = "Great! I will assist you in English. What is your query?"
             audio_url = _speak(reply, "en")
             return jsonify({
                 "transcript": transcript,
@@ -394,21 +271,6 @@ def call_process():
         })
 
     # ── Normal Q&A turn ───────────────────────────────────────────────────────
-<<<<<<< HEAD
-    
-    lang = call_state["language"]
-    kind, response = answer_question(transcript, history=list(call_history), language=lang)
-
-    if response:
-        call_history.append({"role": "user", "content": transcript})
-        call_history.append({"role": "assistant", "content": response})
-        
-        # Keep history bounded
-        if len(call_history) > _MAX_HISTORY_TURNS * 2:
-            call_history[:] = call_history[-(_MAX_HISTORY_TURNS * 2):]
-        
-        # Generate TTS (async-safe)
-=======
     lang = call_state["language"]  # "en" or "ur"
     kind, response = answer_question(transcript, history=list(call_history), language=lang)
 
@@ -417,7 +279,6 @@ def call_process():
         call_history.append({"role": "assistant",  "content": response})
         if len(call_history) > _MAX_HISTORY_TURNS * 2:
             call_history[:] = call_history[-(_MAX_HISTORY_TURNS * 2):]
->>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
         audio_url = _speak(response, lang)
     else:
         audio_url = None
@@ -440,36 +301,23 @@ def admin_reload_kb():
         return jsonify({"error": "Secret not configured"}), 503
     if request.headers.get("X-Admin-Secret") != secret:
         return jsonify({"error": "Unauthorized"}), 401
-    
+
     rag.reload_kb()
     return jsonify({"ok": True, "chunks": len(rag.chunks)})
 
 @app.errorhandler(500)
 def handle_500(error):
-    """Graceful 500 error response."""
     import traceback
     traceback.print_exc()
     return jsonify({"error": "Server error. Please try again."}), 500
 
 @app.errorhandler(404)
 def handle_404(error):
-    """Graceful 404."""
     return jsonify({"error": "Not found"}), 404
 
 if __name__ == "__main__":
-<<<<<<< HEAD
-    # Prefetch greeting on startup for faster first response
-    try:
-        prefetch_greeting(_greeting_text, "en")
-        prefetch_greeting(_greeting_text, "ur")
-    except Exception as e:
-        print(f"[APP] Warning: greeting prefetch failed: {e}")
-    
     app.run(
         debug=os.getenv("FLASK_DEBUG", "").strip().lower() in {"1", "true", "yes"},
         host="0.0.0.0",
         port=int(os.getenv("PORT", "5000")),
     )
-=======
-    app.run(debug=os.getenv("FLASK_DEBUG", "").strip().lower() in {"1", "true", "yes"})
->>>>>>> 05058c6e75e2dc2106b5c65bfa6148fcd8a4b4e6
