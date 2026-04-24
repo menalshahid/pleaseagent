@@ -9,7 +9,7 @@ services:
     region: oregon
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --worker-class gevent --workers 1 --timeout 180 --graceful-timeout 60
-    healthCheckPath: /
+    healthCheckPath: /health
     envVars:
       # Required — Groq STT + LLM (comma-separated GROQ_API_KEYS also supported in Dashboard)
       - key: GROQ_API_KEY

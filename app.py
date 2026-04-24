@@ -126,6 +126,12 @@ def _looks_like_noise_or_hallucinated_stt(text: str) -> bool:
 # Routes
 # ─────────────────────────────────────────────────────────────────────────────
 
+@app.route("/health")
+def health():
+    """Health check endpoint for Render and load balancers."""
+    return jsonify({"status": "ok"}), 200
+
+
 @app.route("/")
 def index():
     return render_template("index.html")

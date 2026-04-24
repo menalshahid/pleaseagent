@@ -9,10 +9,15 @@ language="ur"  →  force Urdu, turbo (same model family as English — faster t
 Mobile compatibility:
 - Accepts webm, mp4, wav, ogg from MediaRecorder
 - Urdu prompts and context to improve recognition
+
+VAD pre-filter:
+- Runs vad.has_speech() before calling Whisper to skip silence-only recordings.
 """
 import os
 import re
 import logging
+
+from vad import has_speech
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +38,26 @@ def transcribe_audio(audio_file, language: str | None = None) -> str:
         fn = getattr(audio_file, "filename", None) or "audio.webm"
         if not fn or "." not in fn:
             fn = "audio.webm"
+
+        # ── VAD pre-filter ────────────────────────────────────────────────────
+        # Skip the Whisper API call for silence-only or noise-only recordings.
+        # Build a minimal MIME hint from the file extension for format detection.
+        _ext_to_mime = {
+            "wav": "audio/wav",
+            "webm": "audio/webm",
+            "mp4": "audio/mp4",
+            "m4a": "audio/mp4",
+            "ogg": "audio/ogg",
+            "mp3": "audio/mpeg",
+        }
+        ext = fn.rsplit(".", 1)[-1].lower() if "." in fn else "webm"
+        mime_hint = _ext_to_mime.get(ext, f"audio/{ext}")
+        if not has_speech(data, mime_hint=mime_hint):
+            logger.info(
+                "STT [lang=%s, file=%s, size=%d]: VAD → silence, skipping Whisper",
+                language, fn, len(data),
+            )
+            return ""
 
         logger.info("STT [lang=%s, file=%s, size=%d bytes]", language, fn, len(data))
 
