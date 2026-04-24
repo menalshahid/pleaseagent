@@ -1,23 +1,31 @@
-"""Text-to-speech using edge-tts (free, no API key) - PRODUCTION HARDENED.
-✓ Proper sync/async handling for Flask
+"""Text-to-speech using Groq API - PRODUCTION HARDENED.
+✓ Works reliably from cloud/datacenter environments (no IP blocking)
 ✓ Urdu text preserved perfectly
 ✓ Caching for greeting (massive latency reduction)
 ✓ Error recovery with fallback
 """
-import edge_tts
 import uuid
 import os
+import re
 import logging
-import asyncio
 import threading
-from functools import lru_cache
+
+from groq_utils import get_client, get_next_key_index, GROQ_KEYS
 
 logger = logging.getLogger(__name__)
 AUDIO_DIR = "static"
 
+# Groq TTS models and voices.
+# Urdu uses playai-tts-arabic: Urdu script is derived from Arabic/Perso-Arabic
+# script, so Groq's Arabic TTS model handles Urdu phonetics correctly.
+_TTS_MODELS = {
+    "en": "playai-tts",
+    "ur": "playai-tts-arabic",
+}
+
 _VOICES = {
-    "en": "en-US-AriaNeural",
-    "ur": "ur-PK-AsadNeural",
+    "en": "Fritz-PlayAI",
+    "ur": "Ahmad-PlayAI",
 }
 
 def _is_urdu_text(text: str) -> bool:
@@ -33,8 +41,6 @@ def _clean_text_safe(text: str, language: str) -> str:
     Clean text ONLY of metadata markers - preserve everything else.
     NEVER corrupt Urdu diacritics or script.
     """
-    import re
-
     t = str(text).strip()
 
     # Remove ONLY [TOPIC:...] markers
@@ -45,53 +51,14 @@ def _clean_text_safe(text: str, language: str) -> str:
 
     return t.strip()
 
-def _get_sync_save():
-    """Create sync save function using threading.
-    Runs edge-tts in a background thread with its own event loop so it is
-    compatible with gunicorn + gevent. Exceptions are propagated back to the
-    caller reliably.
-    """
-
-    def sync_save(communicate, filename: str, timeout: int = 20):
-        result = {"error": None, "done": False}
-
-        def _run():
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(communicate.save(filename))
-                    result["done"] = True
-                finally:
-                    loop.close()
-            except Exception as e:
-                result["error"] = e
-
-        thread = threading.Thread(target=_run, daemon=False)
-        thread.start()
-        thread.join(timeout=timeout)
-
-        if thread.is_alive():
-            logger.error("TTS generation thread timeout after %ds", timeout)
-            raise TimeoutError(f"TTS generation timeout ({timeout}s)")
-
-        if result["error"]:
-            raise result["error"]
-
-        if not result["done"]:
-            raise RuntimeError("TTS thread finished without saving")
-
-    return sync_save
-
-_sync_save = _get_sync_save()
-
 def generate_tts(text: str, language: str = "en") -> str | None:
     """
-    Generate MP3 from text. Returns URL path like /static/audio_xxx.mp3.
+    Generate MP3 from text using Groq TTS API.
+    Returns URL path like /static/audio_xxx.mp3.
 
     PRODUCTION HARDENED:
-    Validates input, preserves Urdu text, 20-second timeout,
-    returns None on failure, verifies file exists before returning URL.
+    Validates input, preserves Urdu text, returns None on failure,
+    verifies file exists before returning URL.
     """
 
     if not text or not str(text).strip():
@@ -110,23 +77,35 @@ def generate_tts(text: str, language: str = "en") -> str | None:
             logger.warning("[TTS] Text truncated from %d to 1997 chars", len(clean_text))
             clean_text = clean_text[:1997] + "..."
 
-        voice = _VOICES.get(language, _VOICES["en"])
+        is_urdu = language == "ur" or _is_urdu_text(clean_text)
+        effective_lang = "ur" if is_urdu else "en"
+
+        model = _TTS_MODELS.get(effective_lang, _TTS_MODELS["en"])
+        voice = _VOICES.get(effective_lang, _VOICES["en"])
         filename = f"{AUDIO_DIR}/audio_{uuid.uuid4().hex}.mp3"
 
-        is_urdu = language == "ur" or _is_urdu_text(clean_text)
-
         logger.info(
-            "[TTS] Generating | lang=%s | urdu=%s | len=%d | file=%s",
-            language, is_urdu, len(clean_text), filename
+            "[TTS] Generating | lang=%s | urdu=%s | model=%s | voice=%s | len=%d | file=%s",
+            language, is_urdu, model, voice, len(clean_text), filename
         )
 
-        communicate = edge_tts.Communicate(clean_text, voice)
+        # All exceptions (network errors, rate limits, invalid credentials, read failures)
+        # are caught by the outer try-except which logs and returns None.
+        client = get_client(get_next_key_index())
+        response = client.audio.speech.create(
+            model=model,
+            voice=voice,
+            input=clean_text,
+            response_format="mp3",
+        )
 
-        try:
-            _sync_save(communicate, filename, timeout=20)
-        except TimeoutError:
-            logger.error("[TTS] Timeout after 20s, returning None")
+        audio_bytes = response.read()
+        if not audio_bytes:
+            logger.error("[TTS] Groq returned empty audio")
             return None
+
+        with open(filename, "wb") as f:
+            f.write(audio_bytes)
 
         if not os.path.exists(filename):
             logger.error("[TTS] File not created: %s", filename)
