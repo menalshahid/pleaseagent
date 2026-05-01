@@ -43,7 +43,7 @@ _PROVIDER_ENV_KEYS = {
 _DEFAULT_PROVIDER_ENV_KEYS = _PROVIDER_ENV_KEYS["en"]
 _GTTS_LANGS = {
     "en": "en",
-    # Use gTTS Urdu voice for more natural Urdu pronunciation.
+    # Use gTTS's native Urdu voice for clearer Urdu pronunciation than Arabic fallback.
     "ur": "ur",
 }
 
@@ -72,8 +72,8 @@ def _safe_remove_file(path: str) -> None:
         return
     try:
         os.remove(path)
-    except OSError:
-        pass
+    except OSError as exc:
+        logger.debug("[TTS] Failed to remove file %s: %s", path, exc)
 
 def _disable_groq_tts(language: str, reason: str) -> None:
     """Disable Groq TTS for a language after non-retryable errors."""
@@ -252,8 +252,9 @@ def generate_tts(text: str, language: str = "en") -> str | None:
             ",".join(provider_order),
         )
 
+        filename = os.path.join(AUDIO_DIR, f"audio_{uuid.uuid4().hex}.mp3")
         for provider in provider_order:
-            filename = os.path.join(AUDIO_DIR, f"audio_{uuid.uuid4().hex}.mp3")
+            _safe_remove_file(filename)
             if provider == "gtts":
                 url = _gtts_fallback(clean_text, effective_lang, filename)
             elif provider == "groq":
