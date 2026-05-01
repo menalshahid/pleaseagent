@@ -13,7 +13,10 @@ import threading
 from groq_utils import get_client, get_next_key_index, GROQ_KEYS
 
 logger = logging.getLogger(__name__)
-AUDIO_DIR = "static"
+# Use absolute path so audio files are always written to the right directory
+# regardless of the working directory when gunicorn starts on Render.
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
+AUDIO_DIR = os.path.join(_APP_DIR, "static")
 
 # Groq TTS models and voices.
 # Urdu uses playai-tts-arabic: Urdu script is derived from Arabic/Perso-Arabic
@@ -82,7 +85,7 @@ def generate_tts(text: str, language: str = "en") -> str | None:
 
         model = _TTS_MODELS.get(effective_lang, _TTS_MODELS["en"])
         voice = _VOICES.get(effective_lang, _VOICES["en"])
-        filename = f"{AUDIO_DIR}/audio_{uuid.uuid4().hex}.mp3"
+        filename = os.path.join(AUDIO_DIR, f"audio_{uuid.uuid4().hex}.mp3")
 
         logger.info(
             "[TTS] Generating | lang=%s | urdu=%s | model=%s | voice=%s | len=%d | file=%s",
@@ -117,7 +120,7 @@ def generate_tts(text: str, language: str = "en") -> str | None:
             os.remove(filename)
             return None
 
-        url = f"/{filename}".replace("//", "/")
+        url = "/static/" + os.path.basename(filename)
         logger.info("[TTS] Success | %d bytes | %s", file_size, url)
         return url
 

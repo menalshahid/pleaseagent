@@ -30,7 +30,8 @@ _WAV_RMS_SPEECH: float = 0.008
 
 # Mean absolute deviation of sampled payload bytes.
 # Compressed silence (webm/ogg/mp4) has near-zero variance; speech is higher.
-_BYTE_VARIANCE_SPEECH: float = 12.0
+# Lowered from 12.0 → 8.0 to reduce false rejections for quiet speech.
+_BYTE_VARIANCE_SPEECH: float = 8.0
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
