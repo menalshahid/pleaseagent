@@ -40,8 +40,10 @@ _PROVIDER_ENV_KEYS = {
     "en": ("TTS_PROVIDER_ORDER_EN", "TTS_PROVIDER_ORDER"),
     "ur": ("TTS_PROVIDER_ORDER_UR", "TTS_PROVIDER_ORDER"),
 }
+_DEFAULT_PROVIDER_ENV_KEYS = _PROVIDER_ENV_KEYS["en"]
 _GTTS_LANGS = {
     "en": "en",
+    # Use gTTS Urdu voice for more natural Urdu pronunciation.
     "ur": "ur",
 }
 
@@ -56,7 +58,7 @@ def _parse_provider_order(raw: str | None, default: tuple[str, ...]) -> tuple[st
     return ordered or default
 
 def _get_provider_order(language: str) -> tuple[str, ...]:
-    env_keys = _PROVIDER_ENV_KEYS.get(language, _PROVIDER_ENV_KEYS["en"])
+    env_keys = _PROVIDER_ENV_KEYS.get(language, _DEFAULT_PROVIDER_ENV_KEYS)
     raw = None
     for key in env_keys:
         value = os.getenv(key)
@@ -64,6 +66,14 @@ def _get_provider_order(language: str) -> tuple[str, ...]:
             raw = value
             break
     return _parse_provider_order(raw, _DEFAULT_PROVIDER_ORDER)
+
+def _safe_remove_file(path: str) -> None:
+    if not os.path.exists(path):
+        return
+    try:
+        os.remove(path)
+    except OSError:
+        pass
 
 def _disable_groq_tts(language: str, reason: str) -> None:
     """Disable Groq TTS for a language after non-retryable errors."""
@@ -118,8 +128,7 @@ def _gtts_fallback(text: str, effective_lang: str, filename: str) -> str | None:
 
         if not os.path.exists(filename) or os.path.getsize(filename) == 0:
             logger.error("[TTS] gTTS produced empty file: %s", filename)
-            if os.path.exists(filename):
-                os.remove(filename)
+            _safe_remove_file(filename)
             return None
 
         url = "/static/" + os.path.basename(filename)
@@ -127,11 +136,7 @@ def _gtts_fallback(text: str, effective_lang: str, filename: str) -> str | None:
         return url
     except Exception as e:
         logger.exception("[TTS] gTTS fallback failed: %s", e)
-        if os.path.exists(filename):
-            try:
-                os.remove(filename)
-            except OSError:
-                pass
+        _safe_remove_file(filename)
         return None
 
 
@@ -204,7 +209,7 @@ def _groq_tts(
     file_size = os.path.getsize(filename)
     if file_size == 0:
         logger.error("[TTS] File is empty: %s", filename)
-        os.remove(filename)
+        _safe_remove_file(filename)
         return None
 
     url = "/static/" + os.path.basename(filename)
