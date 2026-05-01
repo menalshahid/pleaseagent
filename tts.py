@@ -10,7 +10,7 @@ import re
 import logging
 import threading
 
-from groq import BadRequestError as GroqBadRequestError
+from groq import BadRequestError as GroqBadRequestError, NotFoundError as GroqNotFoundError
 from groq_utils import get_client, get_next_key_index, GROQ_KEYS
 
 logger = logging.getLogger(__name__)
@@ -127,10 +127,10 @@ def generate_tts(text: str, language: str = "en") -> str | None:
                 response_format="mp3",
             )
             audio_bytes = response.read()
-        except GroqBadRequestError as groq_err:
+        except (GroqBadRequestError, GroqNotFoundError) as groq_err:
             logger.warning(
-                "[TTS] Groq BadRequestError (%s), falling back to gTTS: %s",
-                language, str(groq_err)[:200],
+                "[TTS] Groq error (%s) for lang=%s, falling back to gTTS: %s",
+                type(groq_err).__name__, language, str(groq_err)[:200],
             )
             return _gtts_fallback(clean_text, effective_lang, filename)
 
