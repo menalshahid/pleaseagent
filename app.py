@@ -11,7 +11,7 @@ except ImportError:
 from flask import Flask, render_template, request, jsonify
 import rag
 from rag import answer_question
-from tts import generate_tts
+from tts import generate_tts, AUDIO_DIR
 from stt import transcribe_audio
 
 app = Flask(__name__)
@@ -92,8 +92,8 @@ def _speak(text: str, lang: str = "en") -> str | None:
     t = re.sub(r'^(PAGE|TOPIC)\s*:\s*[^\n]*\n?', '', t, flags=re.MULTILINE)
 
     # Safety: truncate if way too long
-    if len(t) > 500:
-        t = t[:500]
+    if len(t) > 800:
+        t = t[:800]
 
     return generate_tts(t, language=lang)
 
@@ -158,7 +158,7 @@ def call_end():
     try:
         import time
         now = time.time()
-        for path in glob.glob("static/audio_*.mp3"):
+        for path in glob.glob(os.path.join(AUDIO_DIR, "audio_*.mp3")):
             if now - os.path.getmtime(path) > 3600:  # older than 1 hour
                 try:
                     os.remove(path)
@@ -206,12 +206,18 @@ def call_audio():
 
         transcript = transcribe_audio(audio_file, language=stt_lang)
 
-    # Graceful handling of empty/failed STT
+    # Graceful handling of empty/failed STT — prompt user to repeat
     if not transcript or "sorry" in transcript.lower():
+        reprompt = (
+            "معذرت، آواز واضح نہیں آئی۔ براہ کرم دوبارہ بولیں۔"
+            if call_language == "ur"
+            else "Sorry, I could not hear you clearly. Please try again."
+        )
+        audio_url = _speak(reprompt, call_language or "en")
         return jsonify({
-            "transcript": transcript or "",
-            "reply": "",
-            "audio": "",
+            "transcript": "",
+            "reply": reprompt,
+            "audio": audio_url or "",
             "end_call": False
         })
 

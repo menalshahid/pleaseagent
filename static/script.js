@@ -308,7 +308,7 @@ async function startCall() {
     try {
       const greetingResp = await Promise.race([
         fetch(`/api/greeting?call_id=${encodeURIComponent(callId)}`),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 15000))
       ]);
       const greetingData = await greetingResp.json();
 
@@ -554,7 +554,7 @@ async function sendAudioToServer(audioBlob, mimeUsed) {
           method: "POST",
           body: formData,
         }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("Request timeout")), 30000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Request timeout")), 55000))
       ]);
 
       if (!response.ok) {
