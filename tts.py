@@ -144,6 +144,7 @@ def _groq_tts(
     text: str,
     effective_lang: str,
     filename: str,
+    *,
     original_language: str,
 ) -> str | None:
     disable_reason = _get_groq_tts_disable_reason(effective_lang)
@@ -254,14 +255,15 @@ def generate_tts(text: str, language: str = "en") -> str | None:
 
         filename = os.path.join(AUDIO_DIR, f"audio_{uuid.uuid4().hex}.mp3")
         for provider in provider_order:
-            _safe_remove_file(filename)
             if provider == "gtts":
                 url = _gtts_fallback(clean_text, effective_lang, filename)
             elif provider == "groq":
-                url = _groq_tts(clean_text, effective_lang, filename, language)
-            else:
-                logger.warning("[TTS] Unknown provider '%s' skipped", provider)
-                continue
+                url = _groq_tts(
+                    clean_text,
+                    effective_lang,
+                    filename,
+                    original_language=language,
+                )
 
             if url:
                 return url
