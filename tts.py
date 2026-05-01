@@ -19,16 +19,18 @@ _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 AUDIO_DIR = os.path.join(_APP_DIR, "static")
 
 # Groq TTS models and voices.
-# Urdu uses playai-tts-arabic: Urdu script is derived from Arabic/Perso-Arabic
+# playai-tts / playai-tts-arabic were decommissioned 2025-12-23.
+# Replacement: Orpheus TTS (canopylabs/orpheus-v1-*).
+# Urdu uses orpheus-v1-arabic: Urdu script is derived from Arabic/Perso-Arabic
 # script, so Groq's Arabic TTS model handles Urdu phonetics correctly.
 _TTS_MODELS = {
-    "en": "playai-tts",
-    "ur": "playai-tts-arabic",
+    "en": "canopylabs/orpheus-v1-english",
+    "ur": "canopylabs/orpheus-v1-arabic",
 }
 
 _VOICES = {
-    "en": "Fritz-PlayAI",
-    "ur": "Ahmad-PlayAI",
+    "en": "leo",
+    "ur": "jad",
 }
 
 def _is_urdu_text(text: str) -> bool:
