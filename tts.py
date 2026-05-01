@@ -10,6 +10,7 @@ import re
 import logging
 import threading
 
+from groq import BadRequestError as GroqBadRequestError
 from groq_utils import get_client, get_next_key_index, GROQ_KEYS
 
 logger = logging.getLogger(__name__)
@@ -56,6 +57,27 @@ def _clean_text_safe(text: str, language: str) -> str:
 
     return t.strip()
 
+def _gtts_fallback(text: str, effective_lang: str, filename: str) -> str | None:
+    """Generate MP3 via Google TTS (gTTS) as fallback. Returns URL or None."""
+    try:
+        from gtts import gTTS  # imported here so Groq-only installs still work
+
+        gtts_lang = "ar" if effective_lang == "ur" else "en"
+        tts_obj = gTTS(text=text, lang=gtts_lang)
+        tts_obj.save(filename)
+
+        if not os.path.exists(filename) or os.path.getsize(filename) == 0:
+            logger.error("[TTS] gTTS produced empty file: %s", filename)
+            return None
+
+        url = "/static/" + os.path.basename(filename)
+        logger.info("[TTS] gTTS fallback success | %s", url)
+        return url
+    except Exception as e:
+        logger.exception("[TTS] gTTS fallback failed: %s", e)
+        return None
+
+
 def generate_tts(text: str, language: str = "en") -> str | None:
     """
     Generate MP3 from text using Groq TTS API.
@@ -97,14 +119,21 @@ def generate_tts(text: str, language: str = "en") -> str | None:
         # All exceptions (network errors, rate limits, invalid credentials, read failures)
         # are caught by the outer try-except which logs and returns None.
         client = get_client(get_next_key_index())
-        response = client.audio.speech.create(
-            model=model,
-            voice=voice,
-            input=clean_text,
-            response_format="mp3",
-        )
+        try:
+            response = client.audio.speech.create(
+                model=model,
+                voice=voice,
+                input=clean_text,
+                response_format="mp3",
+            )
+            audio_bytes = response.read()
+        except GroqBadRequestError as groq_err:
+            logger.warning(
+                "[TTS] Groq BadRequestError (%s), falling back to gTTS: %s",
+                language, str(groq_err)[:200],
+            )
+            return _gtts_fallback(clean_text, effective_lang, filename)
 
-        audio_bytes = response.read()
         if not audio_bytes:
             logger.error("[TTS] Groq returned empty audio")
             return None
