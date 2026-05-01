@@ -254,6 +254,7 @@ def generate_tts(text: str, language: str = "en") -> str | None:
         )
 
         filename = os.path.join(AUDIO_DIR, f"audio_{uuid.uuid4().hex}.mp3")
+        url: str | None = None
         for provider in provider_order:
             if provider == "gtts":
                 url = _gtts_fallback(clean_text, effective_lang, filename)
