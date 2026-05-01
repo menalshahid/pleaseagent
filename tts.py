@@ -34,8 +34,36 @@ _VOICES = {
     "ur": "jad",
 }
 
+_SUPPORTED_TTS_PROVIDERS = {"gtts", "groq"}
+_DEFAULT_PROVIDER_ORDER = ("gtts", "groq")
+_PROVIDER_ENV_KEYS = {
+    "en": ("TTS_PROVIDER_ORDER_EN", "TTS_PROVIDER_ORDER"),
+    "ur": ("TTS_PROVIDER_ORDER_UR", "TTS_PROVIDER_ORDER"),
+}
+_GTTS_LANGS = {
+    "en": "en",
+    "ur": "ur",
+}
+
 _GROQ_TTS_DISABLED: dict[str, str] = {}
 _GROQ_TTS_DISABLE_LOCK = threading.Lock()
+
+def _parse_provider_order(raw: str | None, default: tuple[str, ...]) -> tuple[str, ...]:
+    if not raw:
+        return default
+    providers = [p.strip().lower() for p in raw.split(",") if p.strip()]
+    ordered = tuple(p for p in providers if p in _SUPPORTED_TTS_PROVIDERS)
+    return ordered or default
+
+def _get_provider_order(language: str) -> tuple[str, ...]:
+    env_keys = _PROVIDER_ENV_KEYS.get(language, _PROVIDER_ENV_KEYS["en"])
+    raw = None
+    for key in env_keys:
+        value = os.getenv(key)
+        if value:
+            raw = value
+            break
+    return _parse_provider_order(raw, _DEFAULT_PROVIDER_ORDER)
 
 def _disable_groq_tts(language: str, reason: str) -> None:
     """Disable Groq TTS for a language after non-retryable errors."""
@@ -84,12 +112,14 @@ def _gtts_fallback(text: str, effective_lang: str, filename: str) -> str | None:
     try:
         from gtts import gTTS  # imported here so Groq-only installs still work
 
-        gtts_lang = "ar" if effective_lang == "ur" else "en"
+        gtts_lang = _GTTS_LANGS.get(effective_lang, "en")
         tts_obj = gTTS(text=text, lang=gtts_lang)
         tts_obj.save(filename)
 
         if not os.path.exists(filename) or os.path.getsize(filename) == 0:
             logger.error("[TTS] gTTS produced empty file: %s", filename)
+            if os.path.exists(filename):
+                os.remove(filename)
             return None
 
         url = "/static/" + os.path.basename(filename)
@@ -97,8 +127,89 @@ def _gtts_fallback(text: str, effective_lang: str, filename: str) -> str | None:
         return url
     except Exception as e:
         logger.exception("[TTS] gTTS fallback failed: %s", e)
+        if os.path.exists(filename):
+            try:
+                os.remove(filename)
+            except OSError:
+                pass
         return None
 
+
+def _groq_tts(
+    text: str,
+    effective_lang: str,
+    filename: str,
+    original_language: str,
+) -> str | None:
+    disable_reason = _get_groq_tts_disable_reason(effective_lang)
+    if disable_reason:
+        logger.info(
+            "[TTS] Groq TTS disabled for lang=%s (%s); skipping",
+            effective_lang,
+            disable_reason,
+        )
+        return None
+
+    if not GROQ_KEYS:
+        logger.warning("[TTS] GROQ_API_KEY(S) not configured; skipping Groq TTS")
+        return None
+
+    model = _TTS_MODELS.get(effective_lang, _TTS_MODELS["en"])
+    voice = _VOICES.get(effective_lang, _VOICES["en"])
+
+    logger.info(
+        "[TTS] Groq generating | lang=%s | model=%s | voice=%s | len=%d | file=%s",
+        original_language,
+        model,
+        voice,
+        len(text),
+        filename,
+    )
+
+    client = get_client(get_next_key_index())
+    try:
+        response = client.audio.speech.create(
+            model=model,
+            voice=voice,
+            input=text,
+            response_format="mp3",
+        )
+        audio_bytes = response.read()
+    except (GroqBadRequestError, GroqNotFoundError) as groq_err:
+        logger.warning(
+            "[TTS] Groq error (%s) for lang=%s: %s",
+            type(groq_err).__name__,
+            original_language,
+            str(groq_err)[:200],
+        )
+        disable_reason = _should_disable_groq_tts(groq_err)
+        if disable_reason:
+            _disable_groq_tts(effective_lang, disable_reason)
+        return None
+    except Exception as e:
+        logger.exception("[TTS] Groq TTS failed for lang=%s: %s", original_language, str(e)[:200])
+        return None
+
+    if not audio_bytes:
+        logger.error("[TTS] Groq returned empty audio")
+        return None
+
+    with open(filename, "wb") as f:
+        f.write(audio_bytes)
+
+    if not os.path.exists(filename):
+        logger.error("[TTS] File not created: %s", filename)
+        return None
+
+    file_size = os.path.getsize(filename)
+    if file_size == 0:
+        logger.error("[TTS] File is empty: %s", filename)
+        os.remove(filename)
+        return None
+
+    url = "/static/" + os.path.basename(filename)
+    logger.info("[TTS] Groq success | %d bytes | %s", file_size, url)
+    return url
 
 def generate_tts(text: str, language: str = "en") -> str | None:
     """
@@ -128,70 +239,33 @@ def generate_tts(text: str, language: str = "en") -> str | None:
 
         is_urdu = language == "ur" or _is_urdu_text(clean_text)
         effective_lang = "ur" if is_urdu else "en"
-
-        model = _TTS_MODELS.get(effective_lang, _TTS_MODELS["en"])
-        voice = _VOICES.get(effective_lang, _VOICES["en"])
-        filename = os.path.join(AUDIO_DIR, f"audio_{uuid.uuid4().hex}.mp3")
-
-        disable_reason = _get_groq_tts_disable_reason(effective_lang)
-        if disable_reason:
-            logger.info(
-                "[TTS] Groq TTS disabled for lang=%s (%s); using gTTS",
-                effective_lang,
-                disable_reason,
-            )
-            return _gtts_fallback(clean_text, effective_lang, filename)
-
-        if not GROQ_KEYS:
-            logger.warning("[TTS] GROQ_API_KEY(S) not configured; using gTTS fallback")
-            return _gtts_fallback(clean_text, effective_lang, filename)
+        provider_order = _get_provider_order(effective_lang)
 
         logger.info(
-            "[TTS] Generating | lang=%s | urdu=%s | model=%s | voice=%s | len=%d | file=%s",
-            language, is_urdu, model, voice, len(clean_text), filename
+            "[TTS] Provider order | lang=%s | providers=%s",
+            effective_lang,
+            ",".join(provider_order),
         )
 
-        # All exceptions (network errors, rate limits, invalid credentials, read failures)
-        # are caught by the outer try-except which logs and returns None.
-        client = get_client(get_next_key_index())
-        try:
-            response = client.audio.speech.create(
-                model=model,
-                voice=voice,
-                input=clean_text,
-                response_format="mp3",
-            )
-            audio_bytes = response.read()
-        except (GroqBadRequestError, GroqNotFoundError) as groq_err:
-            logger.warning(
-                "[TTS] Groq error (%s) for lang=%s, falling back to gTTS: %s",
-                type(groq_err).__name__, language, str(groq_err)[:200],
-            )
-            disable_reason = _should_disable_groq_tts(groq_err)
-            if disable_reason:
-                _disable_groq_tts(effective_lang, disable_reason)
-            return _gtts_fallback(clean_text, effective_lang, filename)
+        for provider in provider_order:
+            filename = os.path.join(AUDIO_DIR, f"audio_{uuid.uuid4().hex}.mp3")
+            if provider == "gtts":
+                url = _gtts_fallback(clean_text, effective_lang, filename)
+            elif provider == "groq":
+                url = _groq_tts(clean_text, effective_lang, filename, language)
+            else:
+                logger.warning("[TTS] Unknown provider '%s' skipped", provider)
+                continue
 
-        if not audio_bytes:
-            logger.error("[TTS] Groq returned empty audio")
-            return None
+            if url:
+                return url
 
-        with open(filename, "wb") as f:
-            f.write(audio_bytes)
-
-        if not os.path.exists(filename):
-            logger.error("[TTS] File not created: %s", filename)
-            return None
-
-        file_size = os.path.getsize(filename)
-        if file_size == 0:
-            logger.error("[TTS] File is empty: %s", filename)
-            os.remove(filename)
-            return None
-
-        url = "/static/" + os.path.basename(filename)
-        logger.info("[TTS] Success | %d bytes | %s", file_size, url)
-        return url
+        logger.error(
+            "[TTS] All TTS providers failed | lang=%s | providers=%s",
+            effective_lang,
+            ",".join(provider_order),
+        )
+        return None
 
     except Exception as e:
         logger.exception("[TTS] Error (language=%s): %s", language, str(e)[:100])
