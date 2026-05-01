@@ -34,6 +34,28 @@ _VOICES = {
     "ur": "jad",
 }
 
+_GROQ_TTS_DISABLED: dict[str, str] = {}
+_GROQ_TTS_DISABLE_LOCK = threading.Lock()
+
+def _disable_groq_tts(language: str, reason: str) -> None:
+    """Disable Groq TTS for a language after non-retryable errors."""
+    with _GROQ_TTS_DISABLE_LOCK:
+        if language in _GROQ_TTS_DISABLED:
+            return
+        _GROQ_TTS_DISABLED[language] = reason
+    logger.warning("[TTS] Groq TTS disabled for lang=%s: %s", language, reason)
+
+def _get_groq_tts_disable_reason(language: str) -> str | None:
+    return _GROQ_TTS_DISABLED.get(language)
+
+def _should_disable_groq_tts(err: Exception) -> str | None:
+    message = str(err).lower()
+    if "requires terms acceptance" in message or "accept the terms" in message:
+        return "terms acceptance required in Groq console"
+    if "model_not_found" in message or "does not exist" in message or "do not have access" in message:
+        return "model not available for this API key"
+    return None
+
 def _is_urdu_text(text: str) -> bool:
     """Check if text contains Urdu script characters."""
     for char in str(text):
@@ -111,6 +133,19 @@ def generate_tts(text: str, language: str = "en") -> str | None:
         voice = _VOICES.get(effective_lang, _VOICES["en"])
         filename = os.path.join(AUDIO_DIR, f"audio_{uuid.uuid4().hex}.mp3")
 
+        disable_reason = _get_groq_tts_disable_reason(effective_lang)
+        if disable_reason:
+            logger.info(
+                "[TTS] Groq TTS disabled for lang=%s (%s); using gTTS",
+                effective_lang,
+                disable_reason,
+            )
+            return _gtts_fallback(clean_text, effective_lang, filename)
+
+        if not GROQ_KEYS:
+            logger.warning("[TTS] GROQ_API_KEY(S) not configured; using gTTS fallback")
+            return _gtts_fallback(clean_text, effective_lang, filename)
+
         logger.info(
             "[TTS] Generating | lang=%s | urdu=%s | model=%s | voice=%s | len=%d | file=%s",
             language, is_urdu, model, voice, len(clean_text), filename
@@ -132,6 +167,9 @@ def generate_tts(text: str, language: str = "en") -> str | None:
                 "[TTS] Groq error (%s) for lang=%s, falling back to gTTS: %s",
                 type(groq_err).__name__, language, str(groq_err)[:200],
             )
+            disable_reason = _should_disable_groq_tts(groq_err)
+            if disable_reason:
+                _disable_groq_tts(effective_lang, disable_reason)
             return _gtts_fallback(clean_text, effective_lang, filename)
 
         if not audio_bytes:
